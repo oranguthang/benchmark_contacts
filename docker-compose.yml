@@ -47,8 +47,8 @@ services:
     networks:
       - backend
 
-  go:
-    build: ./go
+  go_fiber:
+    build: ./go_fiber
     depends_on:
       db:
         condition: service_healthy
@@ -62,11 +62,11 @@ services:
   benchmark_go:
     build: ./benchmark_client
     depends_on:
-      - go
+      - go_fiber
     command:
       [
         "./benchmark",
-        "--base-url=http://go:8080",
+        "--base-url=http://go_fiber:8080",
         "--post-count=10000",
         "--get-count=10000",
         "--post-workers=100",
