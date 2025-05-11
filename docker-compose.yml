@@ -1,5 +1,6 @@
 services:
   common_service_template: &common_service
+    build: .
     environment:
       DATABASE_URL: postgres://user:password@db:5432/contacts_db
     networks:
