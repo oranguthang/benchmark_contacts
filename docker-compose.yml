@@ -31,6 +31,16 @@ services:
       db:
         condition: service_healthy
 
+  benchmark_tests_python:
+    build: ./benchmark_tests
+    depends_on:
+      python_aiohttp:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://python_aiohttp:8080
+    networks:
+      - backend
+
   benchmark_python:
     build: ./benchmark_client
     depends_on:
