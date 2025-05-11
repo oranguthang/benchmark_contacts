@@ -21,5 +21,11 @@ services:
     environment:
       DATABASE_URL: postgres://user:password@db:5432/contacts
 
+  benchmark_client:
+    build:
+      context: ./benchmark_client
+    depends_on:
+      - python_aiohttp
+
 volumes:
   pgdata:
