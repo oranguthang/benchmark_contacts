@@ -6,19 +6,21 @@ use uuid::Uuid;
 use std::env;
 use dotenv::dotenv;
 
-#[derive(Deserialize, Serialize)]
-struct ContactCreate {
-    external_id: i32,
-    phone_number: String,
-}
-
 #[derive(Queryable, Serialize)]
 struct Contact {
-    id: i32,
+    id: Uuid,
     external_id: i32,
     phone_number: String,
     date_created: String,
     date_updated: String,
+}
+
+#[derive(Deserialize, Insertable)]
+#[table_name = "contacts"]
+struct NewContact {
+    id: Uuid,
+    external_id: i32,
+    phone_number: String,
 }
 
 #[derive(Deserialize)]
@@ -38,18 +40,16 @@ async fn create_contact(
 ) -> impl Responder {
     use crate::schema::contacts;
 
-    let new_contact = ContactCreate {
+    let conn = pool.get().expect("couldn't get db connection from pool");
+
+    let new_contact = NewContact {
+        id: Uuid::new_v4(),
         external_id: contact.external_id,
         phone_number: contact.phone_number.clone(),
     };
 
-    let conn = pool.get().expect("couldn't get db connection from pool");
-
     let inserted_contact: Contact = diesel::insert_into(contacts::table)
-        .values((
-            contacts::external_id.eq(new_contact.external_id),
-            contacts::phone_number.eq(new_contact.phone_number.clone()),
-        ))
+        .values(&new_contact)
         .get_result(&conn)
         .expect("Error saving new contact");
 
