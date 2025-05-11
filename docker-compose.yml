@@ -16,6 +16,16 @@ services:
       start_period: 10s
       timeout: 5s
 
+  common_benchmark_tests_template: &common_benchmark_tests
+    build: ./benchmark_tests
+    networks:
+      - backend
+
+  common_benchmark_template: &common_benchmark
+    build: ./benchmark_tests
+    networks:
+      - backend
+
   db:
     image: postgres:16
     environment:
@@ -39,23 +49,20 @@ services:
     build: ./python_aiohttp
 
   benchmark_tests_python:
-    build: ./benchmark_tests
+    <<: *common_benchmark_tests
     depends_on:
       python_aiohttp:
         condition: service_healthy
     environment:
       BASE_URL: http://python_aiohttp:8080
-    networks:
-      - backend
 
   benchmark_python:
-    build: ./benchmark_client
+    <<: *common_benchmark
     depends_on:
-      - python_aiohttp
+      python_aiohttp:
+        condition: service_healthy
     environment:
       BASE_URL: http://python_aiohttp:8080
-    networks:
-      - backend
 
   go_fiber:
     build: ./go_fiber
