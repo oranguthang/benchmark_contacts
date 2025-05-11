@@ -2,9 +2,7 @@ from aiohttp import web
 from models import Contact
 from db import SessionLocal
 from sqlalchemy.future import select
-import uuid
 from pydantic import BaseModel
-from datetime import datetime
 
 
 class ContactCreate(BaseModel):
