@@ -12,6 +12,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 type Contact struct {
