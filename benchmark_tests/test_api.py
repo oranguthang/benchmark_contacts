@@ -1,11 +1,10 @@
 import pytest
 import httpx
 from pytest import param
-from datetime import datetime
-from typing import List, Dict, Any
 from _pytest.config import Config
 
 BASE_URL = None
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -15,9 +14,20 @@ def pytest_addoption(parser):
         help="Base URL for the API service"
     )
 
+
 def pytest_configure(config: Config):
     global BASE_URL
     BASE_URL = config.getoption("--base-url")
+
+
+def check_contact(contact):
+    assert contact.keys() == {"id", "external_id", "phone_number", "date_created", "date_updated"}
+    assert isinstance(contact["id"], int)
+    assert isinstance(contact["external_id"], int)
+    assert isinstance(contact["phone_number"], str)
+    assert isinstance(contact["date_created"], str)
+    assert isinstance(contact["date_updated"], str)
+
 
 @pytest.mark.parametrize("contact", [
     param({"external_id": 100, "phone_number": "555-0100"}, id="contact-100"),
@@ -46,6 +56,7 @@ def test_create_contact(contact):
     }
     assert data == expected_response
 
+
 @pytest.mark.parametrize("params, expected_count", [
     ({"external_id": "100"}, 1),
     ({"phone_number": "555-0101"}, 1),
@@ -61,12 +72,8 @@ def test_get_contacts_with_filters(params, expected_count):
     assert len(data) == expected_count
 
     for contact in data:
-        assert contact.keys() == {"id", "external_id", "phone_number", "date_created", "date_updated"}
-        assert isinstance(contact["id"], int)
-        assert isinstance(contact["external_id"], int)
-        assert isinstance(contact["phone_number"], str)
-        assert isinstance(contact["date_created"], str)
-        assert isinstance(contact["date_updated"], str)
+        check_contact(contact)
+
 
 def test_get_all_contacts():
     response = httpx.get(f"{BASE_URL}/contacts")
@@ -76,9 +83,12 @@ def test_get_all_contacts():
     assert len(data) == 10  # Мы создали 10 контактов
 
     for contact in data:
-        assert contact.keys() == {"id", "external_id", "phone_number", "date_created", "date_updated"}
-        assert isinstance(contact["id"], int)
-        assert isinstance(contact["external_id"], int)
-        assert isinstance(contact["phone_number"], str)
-        assert isinstance(contact["date_created"], str)
-        assert isinstance(contact["date_updated"], str)
+        check_contact(contact)
+
+
+def test_ping():
+    response = httpx.get(f"{BASE_URL}/ping")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, str)
+    assert data == "pong"
