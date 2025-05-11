@@ -121,6 +121,11 @@ Query параметры:
 
 ```bash
 make benchmark-python
+make benchmark-php
+make benchmark-java
+make benchmark-rust
+make benchmark-go
+make benchmark-node
 ```
 
 ### 📦 Другие удобные таргеты:
@@ -132,8 +137,8 @@ make benchmark-python
 ## 📌 Планируемые реализации:
 
 - [x] Python (aiohttp)
-- [ ] Java (Spring Boot)
-- [ ] Golang
-- [ ] Rust
-- [ ] PHP
-- [ ] Node.js
+- [x] Java (Spring Boot)
+- [x] Golang
+- [x] Rust
+- [x] PHP
+- [x] Node.js

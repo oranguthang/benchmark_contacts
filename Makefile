@@ -2,23 +2,88 @@
 COMPOSE_FILE=docker-compose.yml
 
 # Сервисы
-PYTHON_SERVICES=python_db python_aiohttp benchmark_python
+PYTHON_SERVICES=db python_aiohttp benchmark_python
+PHP_SERVICES=db php_slim benchmark_php
+JAVA_SERVICES=db java_spring benchmark_java
+RUST_SERVICES=db rust_actix benchmark_rust
+GO_SERVICES=db go benchmark_go
+NODE_SERVICES=db node_express benchmark_node
 
 # Общие команды
 down:
 	docker-compose -f $(COMPOSE_FILE) down -v
 
 up-python:
-	docker-compose -f $(COMPOSE_FILE) up -d python_db python_aiohttp
+	docker-compose -f $(COMPOSE_FILE) up -d db python_aiohttp
+
+up-php:
+	docker-compose -f $(COMPOSE_FILE) up -d db php_slim
+
+up-java:
+	docker-compose -f $(COMPOSE_FILE) up -d db java_spring
+
+up-rust:
+	docker-compose -f $(COMPOSE_FILE) up -d db rust_actix
+
+up-go:
+	docker-compose -f $(COMPOSE_FILE) up -d db go
+
+up-node:
+	docker-compose -f $(COMPOSE_FILE) up -d db node_express
 
 build-python:
 	docker-compose -f $(COMPOSE_FILE) build $(PYTHON_SERVICES)
+
+build-php:
+	docker-compose -f $(COMPOSE_FILE) build $(PHP_SERVICES)
+
+build-java:
+	docker-compose -f $(COMPOSE_FILE) build $(JAVA_SERVICES)
+
+build-rust:
+	docker-compose -f $(COMPOSE_FILE) build $(RUST_SERVICES)
+
+build-go:
+	docker-compose -f $(COMPOSE_FILE) build $(GO_SERVICES)
+
+build-node:
+	docker-compose -f $(COMPOSE_FILE) build $(NODE_SERVICES)
 
 # Бенчмарк для Python
 benchmark-python: down build-python up-python
 	@echo "Ожидание запуска сервиса..."
 	sleep 10
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_python
+
+# Бенчмарк для PHP
+benchmark-php: down build-php up-php
+	@echo "Ожидание запуска сервиса..."
+	sleep 10
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_php
+
+# Бенчмарк для Java
+benchmark-java: down build-java up-java
+	@echo "Ожидание запуска сервиса..."
+	sleep 10
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_java
+
+# Бенчмарк для Rust
+benchmark-rust: down build-rust up-rust
+	@echo "Ожидание запуска сервиса..."
+	sleep 10
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_rust
+
+# Бенчмарк для Go
+benchmark-go: down build-go up-go
+	@echo "Ожидание запуска сервиса..."
+	sleep 10
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_go
+
+# Бенчмарк для Node.js
+benchmark-node: down build-node up-node
+	@echo "Ожидание запуска сервиса..."
+	sleep 10
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_node
 
 # Полная остановка всех контейнеров
 stop:
@@ -28,8 +93,43 @@ stop:
 run-python: down build-python up-python
 	@echo "Сервисы Python запущены."
 
+run-php: down build-php up-php
+	@echo "Сервисы PHP запущены."
+
+run-java: down build-java up-java
+	@echo "Сервисы Java запущены."
+
+run-rust: down build-rust up-rust
+	@echo "Сервисы Rust запущены."
+
+run-go: down build-go up-go
+	@echo "Сервисы Go запущены."
+
+run-node: down build-node up-node
+	@echo "Сервисы Node.js запущены."
+
 # Логи для Python сервиса
 logs-python:
 	docker-compose -f $(COMPOSE_FILE) logs -f python_aiohttp
 
-.PHONY: down up-python build-python benchmark-python stop run-python logs-python
+# Логи для PHP сервиса
+logs-php:
+	docker-compose -f $(COMPOSE_FILE) logs -f php_slim
+
+# Логи для Java сервиса
+logs-java:
+	docker-compose -f $(COMPOSE_FILE) logs -f java_spring
+
+# Логи для Rust сервиса
+logs-rust:
+	docker-compose -f $(COMPOSE_FILE) logs -f rust_actix
+
+# Логи для Go сервиса
+logs-go:
+	docker-compose -f $(COMPOSE_FILE) logs -f go
+
+# Логи для Node.js сервиса
+logs-node:
+	docker-compose -f $(COMPOSE_FILE) logs -f node_express
+
+.PHONY: down up-python up-php up-java up-rust up-go up-node build-python build-php build-java build-rust build-go build-node benchmark-python benchmark-php benchmark-java benchmark-rust benchmark-go benchmark-node stop run-python run-php run-java run-rust run-go run-node logs-python logs-php logs-java logs-rust logs-go logs-node
