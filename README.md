@@ -112,7 +112,8 @@ Query параметры:
 1. Собрать и запустить сервис:
 
     ```bash
-    docker-compose up --build
+    docker-compose down -v
+    docker-compose up -d python_db python_aiohttp
     ```
 
 2. (После написания клиента) запустить бенчмарк:

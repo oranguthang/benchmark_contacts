@@ -1,12 +1,12 @@
 version: '3.8'
 
 services:
-  db:
+  python_db:
     image: postgres:16
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: contacts
+      POSTGRES_DB: contacts_db
     ports:
       - "5432:5432"
     volumes:
@@ -15,17 +15,20 @@ services:
   python_aiohttp:
     build: ./python_aiohttp
     depends_on:
-      - db
-    ports:
-      - "8080:8080"
+      - python_db
     environment:
-      DATABASE_URL: postgres://user:password@db:5432/contacts
+      DATABASE_URL: postgres://user:password@python_db:5432/contacts_db
 
-  benchmark_client:
-    build:
-      context: ./benchmark_client
+  benchmark_python:
+    build: ./benchmark_client
     depends_on:
       - python_aiohttp
-
-volumes:
-  pgdata:
+    command:
+      [
+        "./benchmark",
+        "--base-url=http://python_aiohttp:8080",
+        "--post-count=1000000",
+        "--get-count=1000000",
+        "--post-workers=500",
+        "--get-workers=500"
+      ]
