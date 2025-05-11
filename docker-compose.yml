@@ -1,6 +1,21 @@
-version: "3.9"
-
 services:
+  common_service_template: &common_service
+    environment:
+      DATABASE_URL: postgres://user:password@db:5432/contacts_db
+    networks:
+      - backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/contacts" ]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+      timeout: 5s
+
   db:
     image: postgres:16
     environment:
@@ -20,16 +35,8 @@ services:
       retries: 5
 
   python_aiohttp:
+    <<: *common_service
     build: ./python_aiohttp
-    environment:
-      DATABASE_URL: postgres://user:password@db:5432/contacts_db
-    networks:
-      - backend
-    ports:
-      - "8080:8080"
-    depends_on:
-      db:
-        condition: service_healthy
 
   benchmark_tests_python:
     build: ./benchmark_tests
@@ -45,15 +52,8 @@ services:
     build: ./benchmark_client
     depends_on:
       - python_aiohttp
-    command:
-      [
-        "./benchmark",
-        "--base-url=http://python_aiohttp:8080",
-        "--post-count=10000",
-        "--get-count=10000",
-        "--post-workers=100",
-        "--get-workers=100"
-      ]
+    environment:
+      BASE_URL: http://python_aiohttp:8080
     networks:
       - backend
 
