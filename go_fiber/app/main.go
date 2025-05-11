@@ -2,22 +2,22 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
+	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Contact struct {
-	ID          int    `json:"id"`
-	ExternalID  int    `json:"external_id"`
-	PhoneNumber string `json:"phone_number"`
-	DateCreated string `json:"date_created"`
-	DateUpdated string `json:"date_updated"`
+	ID          int       `json:"id"`
+	ExternalID  int       `json:"external_id"`
+	PhoneNumber string    `json:"phone_number"`
+	DateCreated time.Time `json:"date_created"`
+	DateUpdated time.Time `json:"date_updated"`
 }
 
 var db *pgxpool.Pool
@@ -26,7 +26,7 @@ func main() {
 	var err error
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		dsn = "postgres://postgres:postgres@db:5432/postgres"
+		dsn = "postgres://user:password@db:5432/contacts_db"
 	}
 
 	db, err = pgxpool.New(context.Background(), dsn)
@@ -35,62 +35,43 @@ func main() {
 	}
 	defer db.Close()
 
-	http.HandleFunc("/contacts", contactsHandler)
+	app := fiber.New()
+
+	app.Post("/contacts", createContact)
+	app.Get("/contacts", getContacts)
 
 	fmt.Println("Server is running on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(app.Listen(":8080"))
 }
 
-func contactsHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPost:
-		createContact(w, r)
-	case http.MethodGet:
-		getContacts(w, r)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+func createContact(c *fiber.Ctx) error {
+	type ContactInput struct {
+		ExternalID  int    `json:"external_id"`
+		PhoneNumber string `json:"phone_number"`
 	}
-}
 
-func createContact(w http.ResponseWriter, r *http.Request) {
-	var c Contact
-	err := json.NewDecoder(r.Body).Decode(&c)
+	var input ContactInput
+	if err := c.BodyParser(&input); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	query := "INSERT INTO contacts (external_id, phone_number) VALUES ($1, $2)"
+	_, err := db.Exec(context.Background(), query, input.ExternalID, input.PhoneNumber)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 	}
 
-	_, err = db.Exec(context.Background(),
-		"INSERT INTO contacts (external_id, phone_number) VALUES ($1, $2)",
-		c.ExternalID, c.PhoneNumber)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
+	return c.SendStatus(fiber.StatusCreated)
 }
 
-func getContacts(w http.ResponseWriter, r *http.Request) {
-	params := r.URL.Query()
+func getContacts(c *fiber.Ctx) error {
+	externalID := c.Query("external_id")
+	phoneNumber := c.Query("phone_number")
+	limit, _ := strconv.Atoi(c.Query("limit", "10000"))
+	offset, _ := strconv.Atoi(c.Query("offset", "0"))
 
-	externalID := params.Get("external_id")
-	phoneNumber := params.Get("phone_number")
-	limit := 10000
-	offset := 0
-
-	if limitParam := params.Get("limit"); limitParam != "" {
-		parsedLimit, err := strconv.Atoi(limitParam)
-		if err == nil {
-			limit = parsedLimit
-		}
-	}
-
-	if offsetParam := params.Get("offset"); offsetParam != "" {
-		parsedOffset, err := strconv.Atoi(offsetParam)
-		if err == nil {
-			offset = parsedOffset
-		}
+	if limit > 10000 {
+		limit = 10000
 	}
 
 	query := "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE TRUE"
@@ -102,31 +83,30 @@ func getContacts(w http.ResponseWriter, r *http.Request) {
 		args = append(args, externalID)
 		argIdx++
 	}
+
 	if phoneNumber != "" {
 		query += fmt.Sprintf(" AND phone_number = $%d", argIdx)
 		args = append(args, phoneNumber)
+		argIdx++
 	}
 
 	query += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset)
 
 	rows, err := db.Query(context.Background(), query, args...)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 	}
 	defer rows.Close()
 
 	var contacts []Contact
 	for rows.Next() {
-		var c Contact
-		err := rows.Scan(&c.ID, &c.ExternalID, &c.PhoneNumber, &c.DateCreated, &c.DateUpdated)
+		var ct Contact
+		err := rows.Scan(&ct.ID, &ct.ExternalID, &ct.PhoneNumber, &ct.DateCreated, &ct.DateUpdated)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
-		contacts = append(contacts, c)
+		contacts = append(contacts, ct)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(contacts)
+	return c.JSON(contacts)
 }
