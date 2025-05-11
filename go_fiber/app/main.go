@@ -46,23 +46,32 @@ func main() {
 }
 
 func createContact(c *fiber.Ctx) error {
-	type ContactInput struct {
-		ExternalID  int    `json:"external_id"`
-		PhoneNumber string `json:"phone_number"`
-	}
+    type ContactInput struct {
+        ExternalID  int    `json:"external_id"`
+        PhoneNumber string `json:"phone_number"`
+    }
 
-	var input ContactInput
-	if err := c.BodyParser(&input); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
-	}
+    var input ContactInput
+    if err := c.BodyParser(&input); err != nil {
+        return fiber.NewError(fiber.StatusBadRequest, err.Error())
+    }
 
-	query := "INSERT INTO contacts (external_id, phone_number) VALUES ($1, $2)"
-	_, err := db.Exec(context.Background(), query, input.ExternalID, input.PhoneNumber)
-	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
-	}
+    var id string
+    query := "INSERT INTO contacts (external_id, phone_number) VALUES ($1, $2) RETURNING id"
+    err := db.QueryRow(context.Background(), query, input.ExternalID, input.PhoneNumber).Scan(&id)
+    if err != nil {
+        return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+    }
 
-	return c.SendStatus(fiber.StatusCreated)
+    contact := Contact{
+        ID:          id,
+        ExternalID:  input.ExternalID,
+        PhoneNumber: input.PhoneNumber,
+        DateCreated: time.Now().UTC(),
+        DateUpdated: time.Now().UTC(),
+    }
+
+    return c.Status(fiber.StatusCreated).JSON(contact)
 }
 
 func getContacts(c *fiber.Ctx) error {
