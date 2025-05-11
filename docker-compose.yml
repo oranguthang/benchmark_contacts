@@ -29,10 +29,10 @@ services:
       [
         "./benchmark",
         "--base-url=http://python_aiohttp:8080",
-        "--post-count=1000",
-        "--get-count=1000",
-        "--post-workers=100",
-        "--get-workers=100"
+        "--post-count=1000000",
+        "--get-count=1000000",
+        "--post-workers=10000",
+        "--get-workers=10000"
       ]
     networks:
       - backend
