@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   db:
     image: postgres:16
@@ -51,7 +53,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/postgres
+      - DATABASE_URL=postgres://user:password@db:5432/contacts_db
     ports:
       - "8081:8080"
     networks:
@@ -113,7 +115,7 @@ services:
     networks:
       - backend
     ports:
-      - "8081:8080"
+      - "8080:8080"
 
   benchmark_rust:
     build: ./benchmark_client
@@ -139,7 +141,7 @@ services:
     networks:
       - backend
     ports:
-      - "8082:8080"
+      - "8080:8080"
 
   benchmark_node:
     build: ./benchmark_client
@@ -148,7 +150,7 @@ services:
     command:
       [
         "./benchmark",
-        "--base-url=http://node:8080",
+        "--base-url=http://node_express:8080",
         "--post-count=10000",
         "--get-count=10000",
         "--post-workers=100",
