@@ -1,9 +1,9 @@
 table! {
     contacts (id) {
-        id -> Int4,
+        id -> Uuid,
         external_id -> Int4,
         phone_number -> Varchar,
-        date_created -> Timestamptz,
-        date_updated -> Timestamptz,
+        date_created -> Timestamp,
+        date_updated -> Timestamp,
     }
 }
