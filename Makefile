@@ -2,12 +2,12 @@
 COMPOSE_FILE=docker-compose.yml
 
 # Сервисы
-PYTHON_SERVICES=db python_aiohttp benchmark_python
-PHP_SERVICES=db php_slim benchmark_php
-JAVA_SERVICES=db java_spring benchmark_java
-RUST_SERVICES=db rust_actix benchmark_rust
-GO_SERVICES=db go benchmark_go
-NODE_SERVICES=db node_express benchmark_node
+PYTHON_SERVICES=db python_aiohttp benchmark_tests_python benchmark_python
+PHP_SERVICES=db php_slim benchmark_tests_php benchmark_php
+JAVA_SERVICES=db java_spring benchmark_tests_java benchmark_java
+RUST_SERVICES=db rust_actix benchmark_tests_rust benchmark_rust
+GO_SERVICES=db go_fiber benchmark_tests_go benchmark_go
+NODE_SERVICES=db node_express benchmark_tests_node benchmark_node
 
 # Общие команды
 down:
@@ -53,37 +53,37 @@ build-node:
 benchmark-python: down build-python up-python
 	@echo "Ожидание запуска сервиса..."
 	sleep 10
-	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_python
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_python benchmark_python
 
 # Бенчмарк для PHP
 benchmark-php: down build-php up-php
 	@echo "Ожидание запуска сервиса..."
 	sleep 10
-	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_php
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_php benchmark_php
 
 # Бенчмарк для Java
 benchmark-java: down build-java up-java
 	@echo "Ожидание запуска сервиса..."
 	sleep 10
-	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_java
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_java benchmark_java
 
 # Бенчмарк для Rust
 benchmark-rust: down build-rust up-rust
 	@echo "Ожидание запуска сервиса..."
 	sleep 10
-	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_rust
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_rust benchmark_rust
 
 # Бенчмарк для Go
 benchmark-go: down build-go up-go
 	@echo "Ожидание запуска сервиса..."
 	sleep 10
-	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_go
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_go benchmark_go
 
 # Бенчмарк для Node.js
 benchmark-node: down build-node up-node
 	@echo "Ожидание запуска сервиса..."
 	sleep 10
-	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_node
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_node benchmark_node
 
 # Полная остановка всех контейнеров
 stop:
