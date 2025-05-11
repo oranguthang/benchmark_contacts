@@ -1,5 +1,5 @@
 services:
-  python_db:
+  db:
     image: postgres:16
     environment:
       POSTGRES_USER: user
@@ -20,13 +20,13 @@ services:
   python_aiohttp:
     build: ./python_aiohttp
     environment:
-      DATABASE_URL: postgres://user:password@python_db:5432/contacts_db
+      DATABASE_URL: postgres://user:password@db:5432/contacts_db
     networks:
       - backend
     ports:
       - "8080:8080"
     depends_on:
-      python_db:
+      db:
         condition: service_healthy
 
   benchmark_python:
@@ -45,17 +45,115 @@ services:
     networks:
       - backend
 
-  go_server:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  go:
+    build: ./go
     depends_on:
-      python_db:
+      db:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgres://postgres:postgres@python_db:5432/postgres
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/postgres
     ports:
       - "8081:8080"
+    networks:
+      - backend
+
+  benchmark_go:
+    build: ./benchmark_client
+    depends_on:
+      - go
+    command:
+      [
+        "./benchmark",
+        "--base-url=http://go:8080",
+        "--post-count=10000",
+        "--get-count=10000",
+        "--post-workers=100",
+        "--get-workers=100"
+      ]
+    networks:
+      - backend
+
+  benchmark_php:
+    build: ./benchmark_client
+    depends_on:
+      - php_slim
+    command:
+      [
+        "./benchmark",
+        "--base-url=http://php_slim:8080",
+        "--post-count=10000",
+        "--get-count=10000",
+        "--post-workers=100",
+        "--get-workers=100"
+      ]
+    networks:
+      - backend
+
+  benchmark_java:
+    build: ./benchmark_client
+    depends_on:
+      - java_spring
+    command:
+      [
+        "./benchmark",
+        "--base-url=http://java_spring:8080",
+        "--post-count=10000",
+        "--get-count=10000",
+        "--post-workers=100",
+        "--get-workers=100"
+      ]
+    networks:
+      - backend
+
+  rust_actix:
+    build: ./rust_actix
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+    ports:
+      - "8081:8080"
+
+  benchmark_rust:
+    build: ./benchmark_client
+    depends_on:
+      - rust_actix
+    command:
+      [
+        "./benchmark",
+        "--base-url=http://rust_actix:8080",
+        "--post-count=10000",
+        "--get-count=10000",
+        "--post-workers=100",
+        "--get-workers=100"
+      ]
+    networks:
+      - backend
+
+  node_express:
+    build: ./node_express
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+    ports:
+      - "8082:8080"
+
+  benchmark_node:
+    build: ./benchmark_client
+    depends_on:
+      - node_express
+    command:
+      [
+        "./benchmark",
+        "--base-url=http://node:8080",
+        "--post-count=10000",
+        "--get-count=10000",
+        "--post-workers=100",
+        "--get-workers=100"
+      ]
     networks:
       - backend
 

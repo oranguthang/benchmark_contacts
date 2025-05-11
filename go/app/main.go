@@ -26,7 +26,7 @@ func main() {
 	var err error
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		dsn = "postgres://postgres:postgres@python_db:5432/postgres"
+		dsn = "postgres://postgres:postgres@db:5432/postgres"
 	}
 
 	db, err = pgxpool.New(context.Background(), dsn)
