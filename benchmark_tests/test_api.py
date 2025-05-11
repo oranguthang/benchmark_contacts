@@ -1,32 +1,32 @@
+import os
+
+from unittest.mock import ANY
+from datetime import datetime
+from uuid import UUID
 import pytest
 import httpx
 from pytest import param
-from _pytest.config import Config
-
-BASE_URL = None
 
 
-def pytest_addoption(parser):
-    parser.addoption(
-        "--base-url",
-        action="store",
-        default="http://target_service:8080",
-        help="Base URL for the API service"
-    )
+@pytest.fixture
+def base_url(request):
+    return os.environ.get('BASE_URL')
 
-
-def pytest_configure(config: Config):
-    global BASE_URL
-    BASE_URL = config.getoption("--base-url")
+def is_valid_date(date_string):
+    try:
+        datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S.%f%z")
+        return True
+    except ValueError:
+        return False
 
 
 def check_contact(contact):
     assert contact.keys() == {"id", "external_id", "phone_number", "date_created", "date_updated"}
-    assert isinstance(contact["id"], int)
+    assert isinstance(contact["id"], str) and bool(UUID(contact["id"]))
     assert isinstance(contact["external_id"], int)
     assert isinstance(contact["phone_number"], str)
-    assert isinstance(contact["date_created"], str)
-    assert isinstance(contact["date_updated"], str)
+    assert isinstance(contact["date_created"], str) and is_valid_date(contact["date_created"])
+    assert isinstance(contact["date_updated"], str) and is_valid_date(contact["date_updated"])
 
 
 @pytest.mark.parametrize("contact", [
@@ -41,19 +41,20 @@ def check_contact(contact):
     param({"external_id": 108, "phone_number": "555-0108"}, id="contact-108"),
     param({"external_id": 109, "phone_number": "555-0109"}, id="contact-109"),
 ])
-def test_create_contact(contact):
-    response = httpx.post(f"{BASE_URL}/contacts", json=contact)
-    assert response.status_code == 201
+def test_create_contact(base_url, contact):
+    response = httpx.post(f"{base_url}/contacts", json=contact)
+    assert response.status_code == 200
     data = response.json()
 
     # Проверка что все поля есть и корректные
     expected_response = {
-        "id": pytest.ANY,
+        "id": ANY,
         "external_id": contact["external_id"],
         "phone_number": contact["phone_number"],
-        "date_created": pytest.ANY,
-        "date_updated": pytest.ANY,
+        "date_created": ANY,
+        "date_updated": ANY,
     }
+    check_contact(data)
     assert data == expected_response
 
 
@@ -64,8 +65,8 @@ def test_create_contact(contact):
     ({"offset": "1"}, 9),
     ({"external_id": "101", "phone_number": "555-0101"}, 1),
 ])
-def test_get_contacts_with_filters(params, expected_count):
-    response = httpx.get(f"{BASE_URL}/contacts", params=params)
+def test_get_contacts_with_filters(base_url, params, expected_count):
+    response = httpx.get(f"{base_url}/contacts", params=params)
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
@@ -75,8 +76,8 @@ def test_get_contacts_with_filters(params, expected_count):
         check_contact(contact)
 
 
-def test_get_all_contacts():
-    response = httpx.get(f"{BASE_URL}/contacts")
+def test_get_all_contacts(base_url):
+    response = httpx.get(f"{base_url}/contacts")
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
@@ -86,9 +87,8 @@ def test_get_all_contacts():
         check_contact(contact)
 
 
-def test_ping():
-    response = httpx.get(f"{BASE_URL}/ping")
+def test_ping(base_url):
+    response = httpx.get(f"{base_url}/ping")
     assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, str)
+    data = response.text
     assert data == "pong"
