@@ -45,7 +45,6 @@ func init() {
 
 func main() {
 	flag.Parse()
-	rand.Seed(time.Now().UnixNano())
 	fmt.Printf("Benchmark started with config:\nBase URL: %s\nPOST: %d (%d workers)\nGET: %d (%d workers)\n\n",
 		baseURL, postCount, postWorkers, getCount, getWorkers)
 
@@ -68,12 +67,16 @@ func runPOSTRequests() {
 
 	for i := 0; i < postWorkers; i++ {
 		wg.Add(1)
-		go func() {
+		// создаём свой генератор для каждого воркера
+		seed := time.Now().UnixNano() + int64(i)
+		r := rand.New(rand.NewSource(seed))
+
+		go func(r *rand.Rand) {
 			defer wg.Done()
 			for range jobs {
-				createContact()
+				createContact(r)
 			}
-		}()
+		}(r)
 	}
 
 	for i := 0; i < postCount; i++ {
@@ -83,9 +86,9 @@ func runPOSTRequests() {
 	wg.Wait()
 }
 
-func createContact() {
-	extID := rand.Intn(maxExtID)
-	phone := fmt.Sprintf("%s%07d", phonePrefix, rand.Intn(10000000))
+func createContact(r *rand.Rand) {
+	extID := r.Intn(maxExtID)
+	phone := fmt.Sprintf("%s%07d", phonePrefix, r.Intn(10000000))
 
 	body := map[string]interface{}{
 		"external_id":  extID,
@@ -101,7 +104,7 @@ func createContact() {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-
+			log.Printf("Error closing response body: %v", err)
 		}
 	}(resp.Body)
 
@@ -126,12 +129,15 @@ func runGETRequests() {
 
 	for i := 0; i < getWorkers; i++ {
 		wg.Add(1)
-		go func() {
+		seed := time.Now().UnixNano() + int64(i)
+		r := rand.New(rand.NewSource(seed))
+
+		go func(r *rand.Rand) {
 			defer wg.Done()
 			for j := range jobs {
-				doGETRequest(j)
+				doGETRequest(j, r)
 			}
-		}()
+		}(r)
 	}
 
 	for i := 0; i < getCount; i++ {
@@ -141,18 +147,18 @@ func runGETRequests() {
 	wg.Wait()
 }
 
-func doGETRequest(i int) {
+func doGETRequest(i int, r *rand.Rand) {
 	var url string
 
 	switch {
 	case i < getCount/10*3:
-		contact := created[rand.Intn(len(created))]
+		contact := created[r.Intn(len(created))]
 		url = fmt.Sprintf("%s/contacts?phone_number=%s&limit=10000&offset=0", baseURL, contact.PhoneNumber)
 	case i < getCount/10*6:
-		contact := created[rand.Intn(len(created))]
+		contact := created[r.Intn(len(created))]
 		url = fmt.Sprintf("%s/contacts?external_id=%d&limit=10000&offset=0", baseURL, contact.ExternalID)
 	default:
-		randomID := rand.Intn(100001)
+		randomID := r.Intn(100001)
 		url = fmt.Sprintf("%s/contacts?external_id=%d&limit=10000&offset=0", baseURL, randomID)
 	}
 
@@ -164,11 +170,11 @@ func doGETRequest(i int) {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-
+			log.Printf("Error closing response body: %v", err)
 		}
 	}(resp.Body)
 	_, err = io.Copy(io.Discard, resp.Body)
 	if err != nil {
-		fmt.Println("Error copying response body:", err)
+		log.Printf("Error copying response body: %v", err)
 	}
 }
