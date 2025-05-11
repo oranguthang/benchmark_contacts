@@ -1,14 +1,16 @@
 from aiohttp import web
-from .models import Contact
-from .db import SessionLocal
+from models import Contact
+from db import SessionLocal
 from sqlalchemy.future import select
 import uuid
 from pydantic import BaseModel
 from datetime import datetime
 
+
 class ContactCreate(BaseModel):
     external_id: int
     phone_number: str
+
 
 async def create_contact(request):
     data = await request.json()
@@ -30,6 +32,7 @@ async def create_contact(request):
             "date_created": contact.date_created.isoformat(),
             "date_updated": contact.date_updated.isoformat()
         })
+
 
 async def get_contacts(request):
     params = request.query
