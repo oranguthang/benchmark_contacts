@@ -7,14 +7,17 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Contact struct {
-	ID    int    `json:"id"`
-	Name  string `json:"name"`
-	Phone string `json:"phone"`
+	ID          int    `json:"id"`
+	ExternalID  int    `json:"external_id"`
+	PhoneNumber string `json:"phone_number"`
+	DateCreated string `json:"date_created"`
+	DateUpdated string `json:"date_updated"`
 }
 
 var db *pgxpool.Pool
@@ -58,8 +61,8 @@ func createContact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = db.Exec(context.Background(),
-		"INSERT INTO contacts (name, phone) VALUES ($1, $2)",
-		c.Name, c.Phone)
+		"INSERT INTO contacts (external_id, phone_number) VALUES ($1, $2)",
+		c.ExternalID, c.PhoneNumber)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -69,17 +72,54 @@ func createContact(w http.ResponseWriter, r *http.Request) {
 }
 
 func getContacts(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query(context.Background(), "SELECT id, name, phone FROM contacts")
+	params := r.URL.Query()
+
+	externalID := params.Get("external_id")
+	phoneNumber := params.Get("phone_number")
+	limit := 10000
+	offset := 0
+
+	if limitParam := params.Get("limit"); limitParam != "" {
+		parsedLimit, err := strconv.Atoi(limitParam)
+		if err == nil {
+			limit = parsedLimit
+		}
+	}
+
+	if offsetParam := params.Get("offset"); offsetParam != "" {
+		parsedOffset, err := strconv.Atoi(offsetParam)
+		if err == nil {
+			offset = parsedOffset
+		}
+	}
+
+	query := "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE TRUE"
+	var args []interface{}
+	argIdx := 1
+
+	if externalID != "" {
+		query += fmt.Sprintf(" AND external_id = $%d", argIdx)
+		args = append(args, externalID)
+		argIdx++
+	}
+	if phoneNumber != "" {
+		query += fmt.Sprintf(" AND phone_number = $%d", argIdx)
+		args = append(args, phoneNumber)
+	}
+
+	query += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset)
+
+	rows, err := db.Query(context.Background(), query, args...)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	contacts := []Contact{}
+	var contacts []Contact
 	for rows.Next() {
 		var c Contact
-		err := rows.Scan(&c.ID, &c.Name, &c.Phone)
+		err := rows.Scan(&c.ID, &c.ExternalID, &c.PhoneNumber, &c.DateCreated, &c.DateUpdated)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
