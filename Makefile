@@ -17,7 +17,7 @@ build-python:
 # Бенчмарк для Python
 benchmark-python: down build-python up-python
 	@echo "Ожидание запуска сервиса..."
-	sleep 5
+	sleep 10
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_python
 
 # Полная остановка всех контейнеров
