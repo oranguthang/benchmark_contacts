@@ -64,6 +64,22 @@ func main() {
 func runPOSTRequests() {
 	wg := sync.WaitGroup{}
 	jobs := make(chan int, postCount)
+	bar := progressbar.NewOptions(postCount,
+		progressbar.OptionSetDescription("POST requests"),
+		progressbar.OptionShowCount(),
+		progressbar.OptionSetWidth(30),
+		progressbar.OptionShowIts(),
+		progressbar.OptionShowElapsedTime(),
+		progressbar.OptionShowRemainingTime(),
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "#",
+			SaucerHead:    ">",
+			SaucerPadding: "-",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}),
+	)
 
 	for i := 0; i < postWorkers; i++ {
 		wg.Add(1)
@@ -75,6 +91,7 @@ func runPOSTRequests() {
 			defer wg.Done()
 			for range jobs {
 				createContact(r)
+				bar.Add(1)
 			}
 		}(r)
 	}
@@ -126,6 +143,22 @@ func runGETRequests() {
 
 	wg := sync.WaitGroup{}
 	jobs := make(chan int, getCount)
+	bar := progressbar.NewOptions(getCount,
+		progressbar.OptionSetDescription("GET requests "),
+		progressbar.OptionShowCount(),
+		progressbar.OptionSetWidth(30),
+		progressbar.OptionShowIts(),
+		progressbar.OptionShowElapsedTime(),
+		progressbar.OptionShowRemainingTime(),
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "#",
+			SaucerHead:    ">",
+			SaucerPadding: "-",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}),
+	)
 
 	for i := 0; i < getWorkers; i++ {
 		wg.Add(1)
@@ -136,6 +169,7 @@ func runGETRequests() {
 			defer wg.Done()
 			for j := range jobs {
 				doGETRequest(j, r)
+				bar.Add(1)
 			}
 		}(r)
 	}
