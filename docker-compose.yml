@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   python_db:
     image: postgres:16
@@ -32,3 +30,6 @@ services:
         "--post-workers=500",
         "--get-workers=500"
       ]
+
+volumes:
+  pgdata:
