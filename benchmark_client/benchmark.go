@@ -98,7 +98,12 @@ func createContact() {
 		log.Printf("POST error: %v", err)
 		return
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
 
 	var c Contact
 	respBytes, _ := io.ReadAll(resp.Body)
@@ -156,6 +161,14 @@ func doGETRequest(i int) {
 		log.Printf("GET error: %v", err)
 		return
 	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
+	_, err = io.Copy(io.Discard, resp.Body)
+	if err != nil {
+		fmt.Println("Error copying response body:", err)
+	}
 }
