@@ -45,6 +45,20 @@ services:
     networks:
       - backend
 
+  go_server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      python_db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@python_db:5432/postgres
+    ports:
+      - "8081:8080"
+    networks:
+      - backend
+
 networks:
   backend:
     driver: bridge
