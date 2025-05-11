@@ -1,9 +1,10 @@
-FROM golang:1.22-alpine
+FROM golang:1.23
 
 WORKDIR /app
 
 COPY . .
 
-RUN go mod init benchmark_client && go get github.com/google/uuid && go build -o benchmark .
+RUN go mod tidy
+RUN go build -o benchmark .
 
 CMD ["./benchmark"]

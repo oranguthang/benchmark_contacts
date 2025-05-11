@@ -11,15 +11,23 @@ services:
       - pgdata:/var/lib/postgresql/data
     networks:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   python_aiohttp:
     build: ./python_aiohttp
-    depends_on:
-      - python_db
     environment:
       DATABASE_URL: postgres://user:password@python_db:5432/contacts_db
     networks:
       - backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      python_db:
+        condition: service_healthy
 
   benchmark_python:
     build: ./benchmark_client
@@ -29,10 +37,10 @@ services:
       [
         "./benchmark",
         "--base-url=http://python_aiohttp:8080",
-        "--post-count=1000000",
-        "--get-count=1000000",
-        "--post-workers=10000",
-        "--get-workers=10000"
+        "--post-count=10000",
+        "--get-count=10000",
+        "--post-workers=100",
+        "--get-workers=100"
       ]
     networks:
       - backend

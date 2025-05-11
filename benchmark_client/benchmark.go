@@ -68,12 +68,9 @@ func runPOSTRequests() {
 	jobs := make(chan int, postCount)
 	bar := progressbar.NewOptions(postCount,
 		progressbar.OptionSetDescription("POST requests"),
-		progressbar.OptionShowCount(),
-		progressbar.OptionSetWidth(30),
-		progressbar.OptionShowIts(),
-		progressbar.OptionShowElapsedTime(),
-		progressbar.OptionShowRemainingTime(),
-		progressbar.OptionSetPredictTime(true),
+        progressbar.OptionSetWidth(30),
+        progressbar.OptionSetPredictTime(true),
+        //progressbar.OptionClearOnFinish(),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "#",
 			SaucerHead:    ">",
@@ -147,12 +144,9 @@ func runGETRequests() {
 	jobs := make(chan int, getCount)
 	bar := progressbar.NewOptions(getCount,
 		progressbar.OptionSetDescription("GET requests "),
-		progressbar.OptionShowCount(),
-		progressbar.OptionSetWidth(30),
-		progressbar.OptionShowIts(),
-		progressbar.OptionShowElapsedTime(),
-		progressbar.OptionShowRemainingTime(),
-		progressbar.OptionSetPredictTime(true),
+        progressbar.OptionSetWidth(30),
+        progressbar.OptionSetPredictTime(true),
+        //progressbar.OptionClearOnFinish(),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "#",
 			SaucerHead:    ">",
