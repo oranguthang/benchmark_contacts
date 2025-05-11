@@ -65,144 +65,104 @@ services:
       BASE_URL: http://python_aiohttp:8080
 
   go_fiber:
+    <<: *common_service
     build: ./go_fiber
+
+  benchmark_tests_go:
+    <<: *common_benchmark_tests
     depends_on:
-      db:
+      go_fiber:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgres://user:password@db:5432/contacts_db
-    ports:
-      - "8080:8080"
-    networks:
-      - backend
+      BASE_URL: http://go_fiber:8080
 
   benchmark_go:
-    build: ./benchmark_client
+    <<: *common_benchmark
     depends_on:
-      - go_fiber
-    command:
-      [
-        "./benchmark",
-        "--base-url=http://go_fiber:8080",
-        "--post-count=10000",
-        "--get-count=10000",
-        "--post-workers=100",
-        "--get-workers=100"
-      ]
-    networks:
-      - backend
+      go_fiber:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://go_fiber:8080
 
   php_slim:
+    <<: *common_service
     build: ./php_slim
+
+  benchmark_tests_php:
+    <<: *common_benchmark_tests
     depends_on:
-      db:
+      php_slim:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgres://user:password@db:5432/contacts_db
-    ports:
-      - "8080:8080"
-    networks:
-      - backend
+      BASE_URL: http://php_slim:8080
 
   benchmark_php:
-    build: ./benchmark_client
+    <<: *common_benchmark
     depends_on:
-      - php_slim
-    command:
-      [
-        "./benchmark",
-        "--base-url=http://php_slim:8080",
-        "--post-count=10000",
-        "--get-count=10000",
-        "--post-workers=100",
-        "--get-workers=100"
-      ]
-    networks:
-      - backend
+      php_slim:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://php_slim:8080
 
   java_spring:
+    <<: *common_service
     build: ./java_spring
+
+  benchmark_tests_java:
+    <<: *common_benchmark_tests
     depends_on:
-      db:
+      java_spring:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgres://user:password@db:5432/contacts_db
-    ports:
-      - "8080:8080"
-    networks:
-      - backend
+      BASE_URL: http://java_spring:8080
 
   benchmark_java:
-    build: ./benchmark_client
+    <<: *common_benchmark
     depends_on:
-      - java_spring
-    command:
-      [
-        "./benchmark",
-        "--base-url=http://java_spring:8080",
-        "--post-count=10000",
-        "--get-count=10000",
-        "--post-workers=100",
-        "--get-workers=100"
-      ]
-    networks:
-      - backend
+      java_spring:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://java_spring:8080
 
   rust_actix:
+    <<: *common_service
     build: ./rust_actix
+
+  benchmark_tests_rust:
+    <<: *common_benchmark_tests
     depends_on:
-      db:
+      rust_actix:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgres://user:password@db:5432/contacts_db
-    networks:
-      - backend
-    ports:
-      - "8080:8080"
+      BASE_URL: http://rust_actix:8080
 
   benchmark_rust:
-    build: ./benchmark_client
+    <<: *common_benchmark
     depends_on:
-      - rust_actix
-    command:
-      [
-        "./benchmark",
-        "--base-url=http://rust_actix:8080",
-        "--post-count=10000",
-        "--get-count=10000",
-        "--post-workers=100",
-        "--get-workers=100"
-      ]
-    networks:
-      - backend
-
-  node_express:
-    build: ./node_express
-    depends_on:
-      db:
+      rust_actix:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgres://user:password@db:5432/contacts_db
-    networks:
-      - backend
-    ports:
-      - "8080:8080"
+      BASE_URL: http://rust_actix:8080
 
-  benchmark_node:
-    build: ./benchmark_client
+  node_express:
+    <<: *common_service
+    build: ./node_express
+
+  benchmark_tests_node_express:
+    <<: *common_benchmark_tests
     depends_on:
-      - node_express
-    command:
-      [
-        "./benchmark",
-        "--base-url=http://node_express:8080",
-        "--post-count=10000",
-        "--get-count=10000",
-        "--post-workers=100",
-        "--get-workers=100"
-      ]
-    networks:
-      - backend
+      node_express:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://node_express:8080
+
+  benchmark_node_express:
+    <<: *common_benchmark
+    depends_on:
+      node_express:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://node_express:8080
 
 networks:
   backend:
