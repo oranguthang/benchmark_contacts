@@ -52,8 +52,9 @@ build-node:
 # Бенчмарк для Python
 benchmark-python: down build-python up-python
 	@echo "Ожидание запуска сервиса..."
-	sleep 10
-	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_python benchmark_python
+	sleep 1
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_python
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_python
 
 # Бенчмарк для PHP
 benchmark-php: down build-php up-php

@@ -13,4 +13,4 @@ ENV GET_COUNT=10000
 ENV POST_WORKERS=1000
 ENV GET_WORKERS=1000
 
-CMD ["./benchmark", "--base-url", "${BASE_URL}", "--post-count", "${POST_COUNT}", "--get-count", "${GET_COUNT}", "--post-workers", "${POST_WORKERS}", "--get-workers", "${GET_WORKERS}"]
+CMD ./benchmark --base-url="$BASE_URL" --post-count="$POST_COUNT" --get-count="$GET_COUNT" --post-workers="$POST_WORKERS" --get-workers="$GET_WORKERS"
