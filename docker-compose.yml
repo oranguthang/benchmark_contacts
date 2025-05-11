@@ -9,6 +9,8 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
 
   python_aiohttp:
     build: ./python_aiohttp
@@ -16,6 +18,8 @@ services:
       - python_db
     environment:
       DATABASE_URL: postgres://user:password@python_db:5432/contacts_db
+    networks:
+      - backend
 
   benchmark_python:
     build: ./benchmark_client
@@ -30,6 +34,12 @@ services:
         "--post-workers=500",
         "--get-workers=500"
       ]
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
 
 volumes:
   pgdata:
