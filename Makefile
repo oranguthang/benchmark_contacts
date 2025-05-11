@@ -59,32 +59,37 @@ benchmark-python: down build-python up-python
 # Бенчмарк для PHP
 benchmark-php: down build-php up-php
 	@echo "Ожидание запуска сервиса..."
-	sleep 10
-	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_php benchmark_php
+	sleep 1
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_php
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_php
 
 # Бенчмарк для Java
 benchmark-java: down build-java up-java
 	@echo "Ожидание запуска сервиса..."
-	sleep 10
-	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_java benchmark_java
+	sleep 1
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_java
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_java
 
 # Бенчмарк для Rust
 benchmark-rust: down build-rust up-rust
 	@echo "Ожидание запуска сервиса..."
-	sleep 10
-	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_rust benchmark_rust
+	sleep 1
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_rust
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_rust
 
 # Бенчмарк для Go
 benchmark-go: down build-go up-go
 	@echo "Ожидание запуска сервиса..."
-	sleep 10
-	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_go benchmark_go
+	sleep 1
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_go
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_go
 
 # Бенчмарк для Node.js
 benchmark-node: down build-node up-node
 	@echo "Ожидание запуска сервиса..."
-	sleep 10
-	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_node benchmark_node
+	sleep 1
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_python
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_python
 
 # Полная остановка всех контейнеров
 stop:
