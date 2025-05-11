@@ -13,7 +13,7 @@ import (
 )
 
 type Contact struct {
-	ID          int       `json:"id"`
+	ID          string    `json:"id"`
 	ExternalID  int       `json:"external_id"`
 	PhoneNumber string    `json:"phone_number"`
 	DateCreated time.Time `json:"date_created"`
@@ -46,32 +46,32 @@ func main() {
 }
 
 func createContact(c *fiber.Ctx) error {
-    type ContactInput struct {
-        ExternalID  int    `json:"external_id"`
-        PhoneNumber string `json:"phone_number"`
-    }
+	type ContactInput struct {
+		ExternalID  int    `json:"external_id"`
+		PhoneNumber string `json:"phone_number"`
+	}
 
-    var input ContactInput
-    if err := c.BodyParser(&input); err != nil {
-        return fiber.NewError(fiber.StatusBadRequest, err.Error())
-    }
+	var input ContactInput
+	if err := c.BodyParser(&input); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
 
-    var id string
-    query := "INSERT INTO contacts (external_id, phone_number) VALUES ($1, $2) RETURNING id"
-    err := db.QueryRow(context.Background(), query, input.ExternalID, input.PhoneNumber).Scan(&id)
-    if err != nil {
-        return fiber.NewError(fiber.StatusInternalServerError, err.Error())
-    }
+	var id string
+	query := "INSERT INTO contacts (external_id, phone_number) VALUES ($1, $2) RETURNING id"
+	err := db.QueryRow(context.Background(), query, input.ExternalID, input.PhoneNumber).Scan(&id)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+	}
 
-    contact := Contact{
-        ID:          id,
-        ExternalID:  input.ExternalID,
-        PhoneNumber: input.PhoneNumber,
-        DateCreated: time.Now().UTC(),
-        DateUpdated: time.Now().UTC(),
-    }
+	contact := Contact{
+		ID:          id,
+		ExternalID:  input.ExternalID,
+		PhoneNumber: input.PhoneNumber,
+		DateCreated: time.Now().UTC(),
+		DateUpdated: time.Now().UTC(),
+	}
 
-    return c.Status(fiber.StatusCreated).JSON(contact)
+	return c.Status(fiber.StatusCreated).JSON(contact)
 }
 
 func getContacts(c *fiber.Ctx) error {
@@ -122,5 +122,5 @@ func getContacts(c *fiber.Ctx) error {
 }
 
 func ping(c *fiber.Ctx) error {
-    return c.SendString("pong")
+	return c.SendString("pong")
 }

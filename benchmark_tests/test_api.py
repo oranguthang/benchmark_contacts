@@ -1,11 +1,11 @@
 import os
 
 from unittest.mock import ANY
-from datetime import datetime
 from uuid import UUID
 import pytest
 import httpx
 from pytest import param
+from dateutil import parser
 
 
 @pytest.fixture
@@ -14,10 +14,9 @@ def base_url(request):
 
 def is_valid_date(date_string):
     try:
-        datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S.%f%z")
-        return True
-    except ValueError:
-        return False
+        return parser.isoparse(date_string)
+    except (ValueError, TypeError):
+        pytest.fail(f"Invalid date format: {date_string}")
 
 
 def check_contact(contact):
@@ -43,7 +42,7 @@ def check_contact(contact):
 ])
 def test_create_contact(base_url, contact):
     response = httpx.post(f"{base_url}/contacts", json=contact)
-    assert response.status_code == 200
+    assert response.status_code == 201
     data = response.json()
 
     # Проверка что все поля есть и корректные
