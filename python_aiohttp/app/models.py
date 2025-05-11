@@ -2,7 +2,8 @@ from sqlalchemy import Column, String, DateTime, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
-from .db import Base
+from db import Base
+
 
 class Contact(Base):
     __tablename__ = "contacts"

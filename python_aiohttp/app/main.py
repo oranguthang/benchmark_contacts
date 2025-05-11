@@ -1,6 +1,6 @@
 from aiohttp import web
-from .routes import create_contact, get_contacts
-from .db import engine, Base
+from routes import create_contact, get_contacts
+from db import engine, Base
 
 async def init_app():
     app = web.Application()
