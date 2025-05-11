@@ -55,7 +55,7 @@ services:
     environment:
       - DATABASE_URL=postgres://user:password@db:5432/contacts_db
     ports:
-      - "8081:8080"
+      - "8080:8080"
     networks:
       - backend
 
@@ -75,6 +75,18 @@ services:
     networks:
       - backend
 
+  php_slim:
+    build: ./php_slim
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://user:password@db:5432/contacts_db
+    ports:
+      - "8080:8080"
+    networks:
+      - backend
+
   benchmark_php:
     build: ./benchmark_client
     depends_on:
@@ -88,6 +100,18 @@ services:
         "--post-workers=100",
         "--get-workers=100"
       ]
+    networks:
+      - backend
+
+  java_spring:
+    build: ./java_spring
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://user:password@db:5432/contacts_db
+    ports:
+      - "8080:8080"
     networks:
       - backend
 
@@ -112,6 +136,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://user:password@db:5432/contacts_db
     networks:
       - backend
     ports:
@@ -138,6 +164,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://user:password@db:5432/contacts_db
     networks:
       - backend
     ports:
