@@ -39,6 +39,7 @@ func main() {
 
 	app.Post("/contacts", createContact)
 	app.Get("/contacts", getContacts)
+	app.Get("/ping", ping)
 
 	fmt.Println("Server is running on :8080")
 	log.Fatal(app.Listen(":8080"))
@@ -109,4 +110,8 @@ func getContacts(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(contacts)
+}
+
+func ping(c *fiber.Ctx) error {
+    return c.SendString("pong")
 }
