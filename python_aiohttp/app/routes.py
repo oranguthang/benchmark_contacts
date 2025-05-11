@@ -59,3 +59,7 @@ async def get_contacts(request):
                 "date_updated": c.date_updated.isoformat()
             } for c in contacts
         ])
+
+
+async def ping(request):
+    return web.Response(text="pong")
