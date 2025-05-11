@@ -29,7 +29,7 @@ async def create_contact(request):
             "phone_number": contact.phone_number,
             "date_created": contact.date_created.isoformat(),
             "date_updated": contact.date_updated.isoformat()
-        })
+        }, status=201)
 
 
 async def get_contacts(request):
