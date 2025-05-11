@@ -26,7 +26,7 @@ up-rust:
 	docker-compose -f $(COMPOSE_FILE) up -d db rust_actix
 
 up-go:
-	docker-compose -f $(COMPOSE_FILE) up -d db go
+	docker-compose -f $(COMPOSE_FILE) up -d db go_fiber
 
 up-node:
 	docker-compose -f $(COMPOSE_FILE) up -d db node_express
@@ -132,7 +132,7 @@ logs-rust:
 
 # Логи для Go сервиса
 logs-go:
-	docker-compose -f $(COMPOSE_FILE) logs -f go
+	docker-compose -f $(COMPOSE_FILE) logs -f go_fiber
 
 # Логи для Node.js сервиса
 logs-node:
