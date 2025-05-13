@@ -90,7 +90,7 @@ async fn main() {
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     let listener = TcpListener::bind(addr).await.unwrap();
 
-    info!("Server running on {}", addr);
+    info!("Server running on {} (worker threads: {})", addr, num_cpus::get());
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -152,7 +152,7 @@ async fn create_db_pool() -> DbPool {
     let manager = diesel_async::pooled_connection::AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
 
     Pool::builder()
-        .max_size(20)
+        .max_size((num_cpus::get() * 4).try_into().unwrap())
         .build(manager)
         .await
         .expect("Failed to create DB pool")
