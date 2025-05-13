@@ -5,8 +5,15 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
-use diesel_async::{pooled_connection::bb8::Pool, AsyncPgConnection, RunQueryDsl as _};
+use diesel::{
+    prelude::*,
+    TextExpressionMethods,
+};
+use diesel_async::{
+    pooled_connection::bb8::Pool,
+    AsyncPgConnection,
+    RunQueryDsl,
+};
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, time::Instant};
 use tokio::net::TcpListener;
@@ -16,6 +23,8 @@ use uuid::Uuid;
 
 mod schema;
 
+use diesel::{Insertable, Queryable};
+
 type DbPool = Pool<AsyncPgConnection>;
 
 #[derive(Debug, Serialize, Queryable)]
@@ -23,8 +32,8 @@ struct Contact {
     id: Uuid,
     external_id: i32,
     phone_number: String,
-    created_at: chrono::DateTime<Utc>,
-    updated_at: chrono::DateTime<Utc>,
+    date_created: chrono::DateTime<Utc>,
+    date_updated: chrono::DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize, Insertable)]
@@ -96,7 +105,7 @@ async fn create_contact(
             external_id: payload.external_id,
             phone_number: payload.phone_number,
         })
-        .get_result::<Contact>(&mut conn)
+        .get_result(&mut conn)
         .await
         .map_err(db_error)?;
 
@@ -124,7 +133,7 @@ async fn list_contacts(
     let contacts = query
         .limit(params.limit.unwrap_or(100))
         .offset(params.offset.unwrap_or(0))
-        .load::<Contact>(&mut conn)
+        .load(&mut conn)
         .await
         .map_err(db_error)?;
 
@@ -134,7 +143,7 @@ async fn list_contacts(
 
 async fn create_db_pool() -> DbPool {
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let manager = diesel_async::pooled_connection::AsyncDieselConnectionManager::new(db_url);
+    let manager = diesel_async::pooled_connection::AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
 
     Pool::builder()
         .build(manager)

@@ -9,4 +9,4 @@ COPY test_api.py .
 
 ENV BASE_URL=http://localhost:8080
 
-CMD ["pytest", "-v", "test_api.py"]
+CMD ["pytest", "-vv", "test_api.py"]
