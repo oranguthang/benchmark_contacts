@@ -10,6 +10,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/ping" ]
       interval: 5s
