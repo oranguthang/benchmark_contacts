@@ -3,6 +3,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,6 @@ use dotenvy::dotenv;
 use uuid::Uuid;
 use tracing_subscriber;
 use tower_http::trace::TraceLayer;
-use std::time::SystemTime;
 
 mod schema;
 
@@ -22,8 +22,8 @@ struct Contact {
     id: Uuid,
     external_id: i32,
     phone_number: String,
-    date_created: chrono::NaiveDateTime,
-    date_updated: chrono::NaiveDateTime,
+    date_created: DateTime<Utc>,
+    date_updated: DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize, Insertable)]
@@ -32,8 +32,8 @@ struct NewContact {
     id: Uuid,
     external_id: i32,
     phone_number: String,
-    date_created: chrono::NaiveDateTime,
-    date_updated: chrono::NaiveDateTime,
+    date_created: DateTime<Utc>,
+    date_updated: DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,10 +68,12 @@ async fn main() {
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     tracing::info!("Listening on {}", addr);
 
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    axum::serve(
+        axum::Server::bind(&addr),
+        app.into_make_service()
+    )
+    .await
+    .unwrap();
 }
 
 #[derive(Clone)]
