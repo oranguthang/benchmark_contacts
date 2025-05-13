@@ -36,7 +36,7 @@ var (
 	maxExtID     = 1000000
 	createdMutex sync.Mutex
 	created      []Contact
-	client       = &http.Client{}
+	client       *http.Client
 )
 
 func init() {
@@ -48,37 +48,49 @@ func init() {
 }
 
 func main() {
-    numCPU, _ := strconv.Atoi(os.Getenv("CPU_CORES"))
-    if numCPU <= 0 {
-        numCPU = 8
-    }
+	numCPU, _ := strconv.Atoi(os.Getenv("CPU_CORES"))
+	if numCPU <= 0 {
+		numCPU = runtime.NumCPU()
+	}
 	runtime.GOMAXPROCS(numCPU)
 
+	// Initialize HTTP client with connection pooling
+	client = &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:        postWorkers + getWorkers,
+			MaxIdleConnsPerHost: postWorkers + getWorkers,
+			IdleConnTimeout:     90 * time.Second,
+		},
+		Timeout: 30 * time.Second,
+	}
+
 	flag.Parse()
-	fmt.Printf("Benchmark started with config:\nBase URL: %s\nPOST: %d (%d workers)\nGET: %d (%d workers)\n\n",
-		baseURL, postCount, postWorkers, getCount, getWorkers)
+	fmt.Printf("Benchmark started with config:\nBase URL: %s\nPOST: %d (%d workers)\nGET: %d (%d workers)\nCPU: %d\n\n",
+		baseURL, postCount, postWorkers, getCount, getWorkers, numCPU)
 
 	// POST phase
 	startPost := time.Now()
 	runPOSTRequests()
 	elapsedPost := time.Since(startPost)
-	fmt.Printf("Total POST time: %v\n", elapsedPost)
+	fmt.Printf("\nTotal POST time: %v\n", elapsedPost)
+	fmt.Printf("POST RPS: %.2f\n", float64(postCount)/elapsedPost.Seconds())
 
 	// GET phase
 	startGet := time.Now()
 	runGETRequests()
 	elapsedGet := time.Since(startGet)
-	fmt.Printf("Total GET time: %v\n", elapsedGet)
+	fmt.Printf("\nTotal GET time: %v\n", elapsedGet)
+	fmt.Printf("GET RPS: %.2f\n", float64(getCount)/elapsedGet.Seconds())
 }
 
 func runPOSTRequests() {
 	wg := sync.WaitGroup{}
-	jobs := make(chan int, postCount)
+	jobs := make(chan int, postWorkers*10) // Buffered channel
 	bar := progressbar.NewOptions(postCount,
 		progressbar.OptionSetDescription("POST requests"),
-        progressbar.OptionSetWidth(30),
-        progressbar.OptionSetPredictTime(true),
-        //progressbar.OptionClearOnFinish(),
+		progressbar.OptionSetWidth(30),
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionShowCount(),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "#",
 			SaucerHead:    ">",
@@ -90,7 +102,6 @@ func runPOSTRequests() {
 
 	for i := 0; i < postWorkers; i++ {
 		wg.Add(1)
-		// создаём свой генератор для каждого воркера
 		seed := time.Now().UnixNano() + int64(i)
 		r := rand.New(rand.NewSource(seed))
 
@@ -125,17 +136,10 @@ func createContact(r *rand.Rand) {
 		log.Printf("POST error: %v", err)
 		return
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Printf("Error closing response body: %v", err)
-		}
-	}(resp.Body)
+	defer resp.Body.Close()
 
 	var c Contact
-	respBytes, _ := io.ReadAll(resp.Body)
-	err = json.Unmarshal(respBytes, &c)
-	if err == nil {
+	if err := json.NewDecoder(resp.Body).Decode(&c); err == nil {
 		createdMutex.Lock()
 		created = append(created, c)
 		createdMutex.Unlock()
@@ -145,16 +149,16 @@ func createContact(r *rand.Rand) {
 func runGETRequests() {
 	if len(created) == 0 {
 		fmt.Println("No contacts created, skipping GET requests")
-		os.Exit(1)
+		return
 	}
 
 	wg := sync.WaitGroup{}
-	jobs := make(chan int, getCount)
+	jobs := make(chan int, getWorkers*10)
 	bar := progressbar.NewOptions(getCount,
-		progressbar.OptionSetDescription("GET requests "),
-        progressbar.OptionSetWidth(30),
-        progressbar.OptionSetPredictTime(true),
-        //progressbar.OptionClearOnFinish(),
+		progressbar.OptionSetDescription("GET requests"),
+		progressbar.OptionSetWidth(30),
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionShowCount(),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "#",
 			SaucerHead:    ">",
@@ -171,8 +175,8 @@ func runGETRequests() {
 
 		go func(r *rand.Rand) {
 			defer wg.Done()
-			for j := range jobs {
-				doGETRequest(j, r)
+			for range jobs {
+				doGETRequest(r)
 				bar.Add(1)
 			}
 		}(r)
@@ -185,17 +189,17 @@ func runGETRequests() {
 	wg.Wait()
 }
 
-func doGETRequest(i int, r *rand.Rand) {
+func doGETRequest(r *rand.Rand) {
 	var url string
 
-	switch {
-	case i < getCount/10*3:
+	switch r.Intn(10) {
+	case 0, 1, 2: // 30% by phone
 		contact := created[r.Intn(len(created))]
 		url = fmt.Sprintf("%s/contacts?phone_number=%s&limit=10000&offset=0", baseURL, contact.PhoneNumber)
-	case i < getCount/10*6:
+	case 3, 4, 5, 6, 7, 8: // 60% by external_id
 		contact := created[r.Intn(len(created))]
 		url = fmt.Sprintf("%s/contacts?external_id=%d&limit=10000&offset=0", baseURL, contact.ExternalID)
-	default:
+	default: // 10% random
 		randomID := r.Intn(100001)
 		url = fmt.Sprintf("%s/contacts?external_id=%d&limit=10000&offset=0", baseURL, randomID)
 	}
@@ -205,14 +209,6 @@ func doGETRequest(i int, r *rand.Rand) {
 		log.Printf("GET error: %v", err)
 		return
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Printf("Error closing response body: %v", err)
-		}
-	}(resp.Body)
-	_, err = io.Copy(io.Discard, resp.Body)
-	if err != nil {
-		log.Printf("Error copying response body: %v", err)
-	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
 }
