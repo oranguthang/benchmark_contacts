@@ -10,6 +10,8 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -46,6 +48,12 @@ func init() {
 }
 
 func main() {
+    numCPU, _ := strconv.Atoi(os.Getenv("CPU_CORES"))
+    if numCPU <= 0 {
+        numCPU = 8
+    }
+	runtime.GOMAXPROCS(numCPU)
+
 	flag.Parse()
 	fmt.Printf("Benchmark started with config:\nBase URL: %s\nPOST: %d (%d workers)\nGET: %d (%d workers)\n\n",
 		baseURL, postCount, postWorkers, getCount, getWorkers)
