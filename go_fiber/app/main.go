@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -23,13 +24,28 @@ type Contact struct {
 var db *pgxpool.Pool
 
 func main() {
+    numCPU, _ := strconv.Atoi(os.Getenv("CPU_CORES"))
+    if numCPU <= 0 {
+        numCPU = 8
+    }
+	runtime.GOMAXPROCS(numCPU)
+
 	var err error
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = "postgres://user:password@db:5432/contacts_db"
 	}
 
-	db, err = pgxpool.New(context.Background(), dsn)
+	config, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		log.Fatalf("Unable to parse database config: %v\n", err)
+	}
+
+	poolSize := numCPU * 4
+	config.MaxConns = int32(poolSize)
+	config.MinConns = int32(poolSize / 2)
+
+	db, err = pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)
 	}
@@ -41,7 +57,7 @@ func main() {
 	app.Get("/contacts", getContacts)
 	app.Get("/ping", ping)
 
-	fmt.Println("Server is running on :8080")
+	fmt.Printf("Server is running on :8080 using %d CPU cores and database pool size %d", numCPU, poolSize)
 	log.Fatal(app.Listen(":8080"))
 }
 

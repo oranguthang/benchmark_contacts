@@ -13,4 +13,6 @@ RUN go build -o server .
 
 EXPOSE 8080
 
+ENV CPU_CORES=8
+
 CMD ["./server"]
