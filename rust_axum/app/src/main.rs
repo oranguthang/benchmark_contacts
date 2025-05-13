@@ -4,9 +4,12 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgPoolOptions, PgPool, Row};
+use sqlx::{
+    postgres::PgPoolOptions,
+    types::chrono::{DateTime, Utc},
+    PgPool, Row,
+};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
@@ -18,8 +21,8 @@ struct Contact {
     id: Uuid,
     external_id: i32,
     phone_number: String,
-    date_created: chrono::DateTime<Utc>,
-    date_updated: chrono::DateTime<Utc>,
+    date_created: DateTime<Utc>,
+    date_updated: DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -57,7 +60,7 @@ async fn async_main() -> anyhow::Result<()> {
         .init();
 
     let db_pool = PgPoolOptions::new()
-        .max_connections((num_cpus::get() * 4) as u32)
+        .max_connections(num_cpus::get() as u32 * 4)
         .connect(&std::env::var("DATABASE_URL")?)
         .await?;
 
@@ -120,18 +123,15 @@ async fn list_contacts(
     ".to_string();
 
     let mut conditions = Vec::new();
-    let mut binds = Vec::new();
     let mut bind_counter = 1;
 
     if let Some(ext_id) = params.external_id {
         conditions.push(format!("external_id = ${}", bind_counter));
-        binds.push(ext_id.to_string());
         bind_counter += 1;
     }
 
     if let Some(phone) = params.phone_number {
         conditions.push(format!("phone_number ILIKE ${}", bind_counter));
-        binds.push(format!("%{}%", phone));
         bind_counter += 1;
     }
 
@@ -148,8 +148,12 @@ async fn list_contacts(
 
     let mut query_builder = sqlx::query(&query);
 
-    for bind in binds {
-        query_builder = query_builder.bind(bind);
+    if let Some(ext_id) = params.external_id {
+        query_builder = query_builder.bind(ext_id);
+    }
+
+    if let Some(phone) = params.phone_number {
+        query_builder = query_builder.bind(format!("%{}%", phone));
     }
 
     let rows = query_builder
