@@ -64,6 +64,7 @@ async fn main() {
     let app_state = Arc::new(AppState { pool });
 
     let app = Router::new()
+        .route("/ping", get(ping))
         .route("/contacts", post(create_contact).get(get_contacts))
         .with_state(app_state)
         .layer(TraceLayer::new_for_http());
@@ -85,7 +86,7 @@ struct AppState {
 async fn create_contact(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<ContactCreate>,
-) -> Result<Json<Contact>, (axum::http::StatusCode, String)> {
+) -> Result<(StatusCode, Json<Contact>), (StatusCode, String)> {
     use schema::contacts::dsl::*;
 
     let mut conn = state.pool.get().map_err(internal_error)?;
@@ -101,7 +102,7 @@ async fn create_contact(
     diesel::insert_into(contacts)
         .values(&new_contact)
         .get_result(&mut conn)
-        .map(Json)
+        .map(|contact| (StatusCode::CREATED, Json(contact)))
         .map_err(internal_error)
 }
 
@@ -132,6 +133,10 @@ async fn get_contacts(
         .load(&mut conn)
         .map(Json)
         .map_err(internal_error)
+}
+
+async fn ping() -> &'static str {
+    "pong"
 }
 
 fn establish_connection_pool(database_url: &str) -> DbPool {
