@@ -14,6 +14,7 @@ use diesel_async::{
     AsyncPgConnection,
     RunQueryDsl,
 };
+use num_cpus;
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, time::Instant};
 use tokio::net::TcpListener;
@@ -87,12 +88,16 @@ async fn main() {
     info!("Server running on {}", addr);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(num_cpus::get())
-        .max_blocking_threads(num_cpus::get())
+        .max_blocking_threads(num_cpus::get() * 2)
         .enable_all()
         .build()
         .unwrap();
 
     runtime.block_on(async {
+        let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+        let listener = TcpListener::bind(addr).await.unwrap();
+
+        info!("Server running on {}", addr);
         axum::serve(listener, app).await.unwrap();
     });
 }
