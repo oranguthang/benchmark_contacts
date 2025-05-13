@@ -6,8 +6,7 @@ use axum::{
 };
 use chrono::Utc;
 use diesel::{
-    prelude::*,
-    TextExpressionMethods,
+    prelude::*
 };
 use diesel_async::{
     pooled_connection::bb8::Pool,
@@ -38,7 +37,6 @@ struct Contact {
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = schema::contacts)]
 struct NewContact {
-    id: Uuid,
     external_id: i32,
     phone_number: String,
 }
@@ -116,16 +114,17 @@ async fn create_contact(
     State(state): State<AppState>,
     Json(payload): Json<ContactCreate>,
 ) -> Result<(StatusCode, Json<Contact>), (StatusCode, String)> {
-    use schema::contacts::dsl::contacts as contacts_table;
+    use schema::contacts::dsl::contacts;
 
     let mut conn = state.db_pool.get().await.map_err(db_error)?;
 
-    let contact = diesel::insert_into(contacts_table)
-        .values(NewContact {
-            id: Uuid::new_v4(),
-            external_id: payload.external_id,
-            phone_number: payload.phone_number,
-        })
+    let new_contact = NewContact {
+        external_id: payload.external_id,
+        phone_number: payload.phone_number,
+    };
+
+    let contact = diesel::insert_into(contacts)
+        .values(&new_contact)
         .get_result::<Contact>(&mut conn)
         .await
         .map_err(db_error)?;
@@ -133,33 +132,45 @@ async fn create_contact(
     Ok((StatusCode::CREATED, Json(contact)))
 }
 
+
 async fn list_contacts(
     State(state): State<AppState>,
     Query(params): Query<QueryParams>,
 ) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
-    use schema::contacts::dsl::{contacts as contacts_table, external_id, phone_number};
-
     let mut conn = state.db_pool.get().await.map_err(db_error)?;
 
-    let mut query = contacts_table.into_boxed();
+    let mut sql = String::from("SELECT * FROM contacts WHERE 1=1");
+    let mut bindings: Vec<(String, String)> = Vec::new();
 
     if let Some(ext_id) = params.external_id {
-        query = query.filter(external_id.eq(ext_id));
+        sql.push_str(" AND external_id = $1");
+        bindings.push(("external_id".to_string(), ext_id.to_string()));
     }
 
-    if let Some(phone) = params.phone_number {
-        query = query.filter(phone_number.like(format!("%{phone}%")));
+    if let Some(ref phone) = params.phone_number {
+        sql.push_str(" AND phone_number ILIKE $2");
+        bindings.push(("phone_number".to_string(), format!("%{}%", phone)));
+    }
+
+    let limit_value = params.limit.unwrap_or(100);
+    let offset_value = params.offset.unwrap_or(0);
+
+    sql.push_str(&format!(" LIMIT {} OFFSET {}", limit_value, offset_value));
+
+    let mut query = diesel::sql_query(sql);
+
+    for (i, (_, value)) in bindings.iter().enumerate() {
+        query = query.bind::<diesel::sql_types::Text, _>(value);
     }
 
     let results = query
-        .limit(params.limit.unwrap_or(100))
-        .offset(params.offset.unwrap_or(0))
         .load::<Contact>(&mut conn)
         .await
         .map_err(db_error)?;
 
     Ok(Json(results))
 }
+
 
 async fn create_db_pool() -> DbPool {
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
