@@ -7,19 +7,19 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-COPY ./app/Cargo.toml ./app/
-RUN mkdir -p ./app/src && \
-    echo "fn main() {}" > ./app/src/main.rs && \
+COPY ./app/Cargo.toml ./
+
+RUN mkdir -p src && \
+    echo "fn main() {}" > src/main.rs && \
     cargo build --release && \
     rm -rf target/release/deps/rust_axum*
 
-COPY ./app /app/app
+COPY ./app/src ./src
 
-RUN cd ./app && \
-    RUSTFLAGS="-C target-cpu=native" cargo build --release && \
+RUN RUSTFLAGS="-C target-cpu=native" cargo build --release && \
     strip target/release/rust_axum
 
 ENV RUST_LOG=info
 ENV TOKIO_WORKER_THREADS=8
 
-CMD ["./app/target/release/rust_axum"]
+CMD ["target/release/rust_axum"]
