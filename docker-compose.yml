@@ -124,25 +124,25 @@ services:
     environment:
       BASE_URL: http://java_spring:8080
 
-  rust_actix:
+  rust_axum:
     <<: *common_service
-    build: ./rust_actix
+    build: rust_axum
 
   benchmark_tests_rust:
     <<: *common_benchmark_tests
     depends_on:
-      rust_actix:
+      rust_axum:
         condition: service_healthy
     environment:
-      BASE_URL: http://rust_actix:8080
+      BASE_URL: http://rust_axum:8080
 
   benchmark_rust:
     <<: *common_benchmark
     depends_on:
-      rust_actix:
+      rust_axum:
         condition: service_healthy
     environment:
-      BASE_URL: http://rust_actix:8080
+      BASE_URL: http://rust_axum:8080
 
   node_express:
     <<: *common_service
