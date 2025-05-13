@@ -102,17 +102,17 @@ async fn create_contact(
     State(state): State<AppState>,
     Json(payload): Json<ContactCreate>,
 ) -> Result<(StatusCode, Json<Contact>), (StatusCode, String)> {
-    use schema::contacts::dsl::*;
+    use schema::contacts::dsl::contacts as contacts_table;
 
     let mut conn = state.db_pool.get().await.map_err(db_error)?;
 
-    let contact = diesel::insert_into(contacts)
+    let contact = diesel::insert_into(contacts_table)
         .values(NewContact {
             id: Uuid::new_v4(),
             external_id: payload.external_id,
             phone_number: payload.phone_number,
         })
-        .get_result(&mut conn)
+        .get_result::<Contact>(&mut conn)
         .await
         .map_err(db_error)?;
 
@@ -123,11 +123,11 @@ async fn list_contacts(
     State(state): State<AppState>,
     Query(params): Query<QueryParams>,
 ) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
-    use schema::contacts::dsl::*;
+    use schema::contacts::dsl::{contacts as contacts_table, external_id, phone_number};
 
     let mut conn = state.db_pool.get().await.map_err(db_error)?;
 
-    let mut query = contacts.into_boxed();
+    let mut query = contacts_table.into_boxed();
 
     if let Some(ext_id) = params.external_id {
         query = query.filter(external_id.eq(ext_id));
@@ -137,14 +137,14 @@ async fn list_contacts(
         query = query.filter(phone_number.like(format!("%{phone}%")));
     }
 
-    let contacts = query
+    let results = query
         .limit(params.limit.unwrap_or(100))
         .offset(params.offset.unwrap_or(0))
-        .load(&mut conn)
+        .load::<Contact>(&mut conn)
         .await
         .map_err(db_error)?;
 
-    Ok(Json(contacts))
+    Ok(Json(results))
 }
 
 async fn create_db_pool() -> DbPool {
