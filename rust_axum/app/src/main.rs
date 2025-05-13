@@ -6,7 +6,7 @@ use axum::{
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::{postgres::PgPoolOptions, PgPool, Row};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
@@ -85,19 +85,26 @@ async fn create_contact(
     State(state): State<AppState>,
     Json(payload): Json<ContactCreate>,
 ) -> Result<(StatusCode, Json<Contact>), (StatusCode, String)> {
-    let contact = sqlx::query_as!(
-        Contact,
+    let row = sqlx::query(
         r#"
         INSERT INTO contacts (external_id, phone_number)
         VALUES ($1, $2)
         RETURNING id, external_id, phone_number, date_created, date_updated
         "#,
-        payload.external_id,
-        payload.phone_number
     )
+    .bind(payload.external_id)
+    .bind(payload.phone_number)
     .fetch_one(&state.db_pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let contact = Contact {
+        id: row.get("id"),
+        external_id: row.get("external_id"),
+        phone_number: row.get("phone_number"),
+        date_created: row.get("date_created"),
+        date_updated: row.get("date_updated"),
+    };
 
     Ok((StatusCode::CREATED, Json(contact)))
 }
@@ -106,38 +113,60 @@ async fn list_contacts(
     State(state): State<AppState>,
     Query(params): Query<QueryParams>,
 ) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
-    let mut sql = String::from("SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE 1=1");
-    let mut bindings: Vec<(String, sqlx::types::Type, Box<dyn sqlx::Encode<'_, sqlx::Postgres> + Send + Sync>)> = vec![];
+    let mut query = "
+        SELECT id, external_id, phone_number, date_created, date_updated
+        FROM contacts
+        WHERE 1=1
+    ".to_string();
+
+    let mut conditions = Vec::new();
+    let mut binds = Vec::new();
+    let mut bind_counter = 1;
 
     if let Some(ext_id) = params.external_id {
-        sql.push_str(" AND external_id = $1");
-        bindings.push((
-            "external_id".into(),
-            sqlx::types::Type::INT4,
-            Box::new(ext_id),
-        ));
+        conditions.push(format!("external_id = ${}", bind_counter));
+        binds.push(ext_id.to_string());
+        bind_counter += 1;
     }
 
-    if let Some(ref phone) = params.phone_number {
-        sql.push_str(" AND phone_number ILIKE $2");
-        bindings.push((
-            "phone_number".into(),
-            sqlx::types::Type::TEXT,
-            Box::new(format!("%{}%", phone)),
-        ));
+    if let Some(phone) = params.phone_number {
+        conditions.push(format!("phone_number ILIKE ${}", bind_counter));
+        binds.push(format!("%{}%", phone));
+        bind_counter += 1;
     }
 
-    sql.push_str(" ORDER BY date_created DESC");
-    sql.push_str(&format!(
-        " LIMIT {} OFFSET {}",
+    if !conditions.is_empty() {
+        query.push_str(" AND ");
+        query.push_str(&conditions.join(" AND "));
+    }
+
+    query.push_str(&format!(
+        " ORDER BY date_created DESC LIMIT {} OFFSET {}",
         params.limit.unwrap_or(100),
         params.offset.unwrap_or(0)
     ));
 
-    let contacts = sqlx::query_as::<_, Contact>(&sql)
+    let mut query_builder = sqlx::query(&query);
+
+    for bind in binds {
+        query_builder = query_builder.bind(bind);
+    }
+
+    let rows = query_builder
         .fetch_all(&state.db_pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let contacts = rows
+        .into_iter()
+        .map(|row| Contact {
+            id: row.get("id"),
+            external_id: row.get("external_id"),
+            phone_number: row.get("phone_number"),
+            date_created: row.get("date_created"),
+            date_updated: row.get("date_updated"),
+        })
+        .collect();
 
     Ok(Json(contacts))
 }
