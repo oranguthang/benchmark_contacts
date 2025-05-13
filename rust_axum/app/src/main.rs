@@ -1,6 +1,3 @@
-use std::panic;
-use std::backtrace::Backtrace;
-
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -17,17 +14,14 @@ use diesel_async::{
     AsyncPgConnection,
     RunQueryDsl,
 };
-use num_cpus;
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, time::Instant};
+use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::{info, Level};
 use uuid::Uuid;
 
 mod schema;
-
-use diesel::{Insertable, Queryable};
 
 type DbPool = Pool<AsyncPgConnection>;
 
@@ -69,10 +63,11 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
-    panic::set_hook(Box::new(|panic_info| {
-        println!("Custom panic occurred: {}\nBacktrace: {:?}",
+    std::panic::set_hook(Box::new(|panic_info| {
+        eprintln!(
+            "Custom panic occurred: {}\nLocation: {:?}",
             panic_info,
-            backtrace::Backtrace::new()
+            panic_info.location()
         );
     }));
 
@@ -92,20 +87,11 @@ async fn main() {
         .with_state(app_state)
         .layer(TraceLayer::new_for_http());
 
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(num_cpus::get())
-        .max_blocking_threads(num_cpus::get() * 2)
-        .enable_all()
-        .build()
-        .unwrap();
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    let listener = TcpListener::bind(addr).await.unwrap();
 
-    runtime.block_on(async {
-        let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-        let listener = TcpListener::bind(addr).await.unwrap();
-
-        info!("Server running on {}", addr);
-        axum::serve(listener, app).await.unwrap();
-    });
+    info!("Server running on {}", addr);
+    axum::serve(listener, app).await.unwrap();
 }
 
 async fn ping() -> &'static str {
@@ -116,10 +102,11 @@ async fn create_contact(
     State(state): State<AppState>,
     Json(payload): Json<ContactCreate>,
 ) -> Result<(StatusCode, Json<Contact>), (StatusCode, String)> {
-    let start = Instant::now();
+    use schema::contacts::dsl::*;
+
     let mut conn = state.db_pool.get().await.map_err(db_error)?;
 
-    let contact = diesel::insert_into(schema::contacts::table)
+    let contact = diesel::insert_into(contacts)
         .values(NewContact {
             id: Uuid::new_v4(),
             external_id: payload.external_id,
@@ -129,7 +116,6 @@ async fn create_contact(
         .await
         .map_err(db_error)?;
 
-    info!("Create contact took: {:?}", start.elapsed());
     Ok((StatusCode::CREATED, Json(contact)))
 }
 
@@ -137,17 +123,18 @@ async fn list_contacts(
     State(state): State<AppState>,
     Query(params): Query<QueryParams>,
 ) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
-    let start = Instant::now();
+    use schema::contacts::dsl::*;
+
     let mut conn = state.db_pool.get().await.map_err(db_error)?;
 
-    let mut query = schema::contacts::table.into_boxed();
+    let mut query = contacts.into_boxed();
 
     if let Some(ext_id) = params.external_id {
-        query = query.filter(schema::contacts::external_id.eq(ext_id));
+        query = query.filter(external_id.eq(ext_id));
     }
 
     if let Some(phone) = params.phone_number {
-        query = query.filter(schema::contacts::phone_number.like(format!("%{phone}%")));
+        query = query.filter(phone_number.like(format!("%{phone}%")));
     }
 
     let contacts = query
@@ -157,7 +144,6 @@ async fn list_contacts(
         .await
         .map_err(db_error)?;
 
-    info!("List contacts took: {:?}", start.elapsed());
     Ok(Json(contacts))
 }
 
@@ -166,7 +152,7 @@ async fn create_db_pool() -> DbPool {
     let manager = diesel_async::pooled_connection::AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
 
     Pool::builder()
-        .max_size((num_cpus::get() * 4).try_into().unwrap())
+        .max_size(20)
         .build(manager)
         .await
         .expect("Failed to create DB pool")
