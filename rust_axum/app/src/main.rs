@@ -1,6 +1,6 @@
 use axum::{
     extract::{Query, State},
-    routing::{get, post},
+    routing::{post},
     Json, Router,
 };
 use diesel::prelude::*;
@@ -11,6 +11,7 @@ use std::{env, net::SocketAddr, sync::Arc};
 use thiserror::Error;
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
+use hyper::Server;
 
 mod schema;
 use crate::schema::contacts;
@@ -88,7 +89,7 @@ async fn main() {
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     println!("Server running at http://{}", addr);
 
-    axum::Server::bind(&addr)
+    Server::bind(&addr)
         .serve(app.into_make_service())
         .await
         .unwrap();
