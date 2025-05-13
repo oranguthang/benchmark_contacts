@@ -20,6 +20,7 @@ use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::{info, Level};
 use uuid::Uuid;
+use num_cpus;
 
 mod schema;
 
@@ -61,8 +62,7 @@ struct AppState {
     db_pool: DbPool,
 }
 
-#[tokio::main]
-async fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::panic::set_hook(Box::new(|panic_info| {
         eprintln!(
             "Custom panic occurred: {}\nLocation: {:?}",
@@ -71,27 +71,42 @@ async fn main() {
         );
     }));
 
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .init();
+    let tokio_runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(num_cpus::get())
+        .max_blocking_threads(num_cpus::get() * 2)
+        .enable_all()
+        .build()?;
 
-    let db_pool = create_db_pool().await;
-    let app_state = AppState { db_pool };
+    tokio_runtime.block_on(async {
+        tracing_subscriber::fmt()
+            .with_max_level(Level::INFO)
+            .init();
 
-    let app = Router::new()
-        .route("/ping", get(ping))
-        .route("/contacts",
-            post(create_contact)
-            .get(list_contacts)
-        )
-        .with_state(app_state)
-        .layer(TraceLayer::new_for_http());
+        let db_pool = create_db_pool().await;
+        let app_state = AppState { db_pool };
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    let listener = TcpListener::bind(addr).await.unwrap();
+        let app = Router::new()
+            .route("/ping", get(ping))
+            .route("/contacts",
+                post(create_contact)
+                .get(list_contacts)
+            )
+            .with_state(app_state)
+            .layer(TraceLayer::new_for_http());
 
-    info!("Server running on {} (worker threads: {})", addr, num_cpus::get());
-    axum::serve(listener, app).await.unwrap();
+        let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+        let listener = TcpListener::bind(addr).await?;
+
+        tracing::info!(
+            "Server started on {} (worker threads: {}, blocking threads: {})",
+            addr,
+            tokio::runtime::Handle::current().metrics().num_workers(),
+            tokio::runtime::Handle::current().metrics().num_blocking_threads()
+        );
+
+        axum::serve(listener, app).await?;
+        Ok(())
+    })
 }
 
 async fn ping() -> &'static str {
