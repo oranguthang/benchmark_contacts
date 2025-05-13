@@ -5,7 +5,7 @@ COMPOSE_FILE=docker-compose.yml
 PYTHON_SERVICES=db python_aiohttp benchmark_tests_python benchmark_python
 PHP_SERVICES=db php_slim benchmark_tests_php benchmark_php
 JAVA_SERVICES=db java_spring benchmark_tests_java benchmark_java
-RUST_SERVICES=db rust_actix benchmark_tests_rust benchmark_rust
+RUST_SERVICES=db rust_axum benchmark_tests_rust benchmark_rust
 GO_SERVICES=db go_fiber benchmark_tests_go benchmark_go
 NODE_SERVICES=db node_express benchmark_tests_node benchmark_node
 
@@ -23,7 +23,7 @@ up-java:
 	docker-compose -f $(COMPOSE_FILE) up -d db java_spring
 
 up-rust:
-	docker-compose -f $(COMPOSE_FILE) up -d db rust_actix
+	docker-compose -f $(COMPOSE_FILE) up -d db rust_axum
 
 up-go:
 	docker-compose -f $(COMPOSE_FILE) up -d db go_fiber
@@ -128,7 +128,7 @@ logs-java:
 
 # Логи для Rust сервиса
 logs-rust:
-	docker-compose -f $(COMPOSE_FILE) logs -f rust_actix
+	docker-compose -f $(COMPOSE_FILE) logs -f rust_axum
 
 # Логи для Go сервиса
 logs-go:
