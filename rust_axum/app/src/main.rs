@@ -1,3 +1,6 @@
+use std::panic;
+use std::backtrace::Backtrace;
+
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -66,6 +69,13 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
+    panic::set_hook(Box::new(|panic_info| {
+        println!("Custom panic occurred: {}\nBacktrace: {:?}",
+            panic_info,
+            backtrace::Backtrace::new()
+        );
+    }));
+
     tracing_subscriber::fmt()
         .with_max_level(Level::INFO)
         .init();
@@ -82,10 +92,6 @@ async fn main() {
         .with_state(app_state)
         .layer(TraceLayer::new_for_http());
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    let listener = TcpListener::bind(addr).await.unwrap();
-
-    info!("Server running on {}", addr);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(num_cpus::get())
         .max_blocking_threads(num_cpus::get() * 2)
@@ -160,7 +166,7 @@ async fn create_db_pool() -> DbPool {
     let manager = diesel_async::pooled_connection::AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
 
     Pool::builder()
-        .max_size(num_cpus::get() * 4)
+        .max_size((num_cpus::get() * 4).try_into().unwrap())
         .build(manager)
         .await
         .expect("Failed to create DB pool")
