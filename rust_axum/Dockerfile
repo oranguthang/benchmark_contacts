@@ -10,6 +10,6 @@ RUN cd ./app && cargo fetch
 
 COPY ./app /app/app
 
-RUN cd ./app && cargo build --release
+RUN cd ./app && RUSTFLAGS="-C target-cpu=native" cargo build --release
 
 CMD ["./app/target/release/rust_axum"]
