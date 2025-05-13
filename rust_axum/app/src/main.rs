@@ -1,33 +1,35 @@
 use axum::{
     extract::{Query, State},
+    http::StatusCode,
+    response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
-use axum::serve;
-use tokio::net::TcpListener;
-use chrono::{DateTime, Utc};
-use diesel::prelude::*;
-use diesel::r2d2::{self, ConnectionManager};
+use chrono::Utc;
+use deadpool_diesel::postgres::Pool;
+use diesel::{prelude::*, insert_into};
 use serde::{Deserialize, Serialize};
-use std::{env, net::SocketAddr, sync::Arc};
-use dotenv::dotenv;
+use std::{net::SocketAddr, sync::Arc};
+use tower_http::{
+    compression::CompressionLayer,
+    trace::{DefaultMakeSpan, TraceLayer},
+};
+use tracing::{info, Level};
 use uuid::Uuid;
-use tracing;
-use tracing_subscriber;
-use tower_http::trace::TraceLayer;
-use axum::http::StatusCode;
 
 mod schema;
 
-type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
+// Типы для базы данных
+type DbPool = deadpool_diesel::postgres::Pool;
+type DbError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug, Serialize, Queryable)]
 struct Contact {
     id: Uuid,
     external_id: i32,
     phone_number: String,
-    date_created: DateTime<Utc>,
-    date_updated: DateTime<Utc>,
+    date_created: chrono::DateTime<Utc>,
+    date_updated: chrono::DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize, Insertable)]
@@ -36,8 +38,8 @@ struct NewContact {
     id: Uuid,
     external_id: i32,
     phone_number: String,
-    date_created: DateTime<Utc>,
-    date_updated: DateTime<Utc>,
+    date_created: chrono::DateTime<Utc>,
+    date_updated: chrono::DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -54,34 +56,47 @@ struct QueryParams {
     offset: Option<i64>,
 }
 
-#[tokio::main]
-async fn main() {
-    dotenv().ok();
-    tracing_subscriber::fmt::init();
-
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let pool = establish_connection_pool(&database_url);
-
-    let app_state = Arc::new(AppState { pool });
-
-    let app = Router::new()
-        .route("/ping", get(ping))
-        .route("/contacts", post(create_contact).get(get_contacts))
-        .with_state(app_state)
-        .layer(TraceLayer::new_for_http());
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    let listener = TcpListener::bind(&addr).await.unwrap();
-    tracing::info!("Listening on {}", addr);
-
-    serve(listener, app)
-        .await
-        .unwrap();
-}
-
 #[derive(Clone)]
 struct AppState {
     pool: DbPool,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), DbError> {
+    tracing_subscriber::fmt()
+        .with_max_level(Level::INFO)
+        .init();
+
+    dotenv::dotenv().ok();
+    let database_url = std::env::var("DATABASE_URL")?;
+
+    let pool = create_pool(&database_url)?;
+    let app_state = Arc::new(AppState { pool });
+
+    let app = Router::new()
+        .route("/ping", get(ping_handler))
+        .route("/contacts",
+            post(create_contact)
+            .get(list_contacts)
+        )
+        .with_state(app_state)
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().include_headers(true))
+        )
+        .layer(CompressionLayer::new());
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    info!("Server listening on {}", addr);
+
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await?;
+    Ok(())
+}
+
+async fn ping_handler() -> &'static str {
+    "pong"
 }
 
 async fn create_contact(
@@ -90,30 +105,34 @@ async fn create_contact(
 ) -> Result<(StatusCode, Json<Contact>), (StatusCode, String)> {
     use schema::contacts::dsl::*;
 
-    let mut conn = state.pool.get().map_err(internal_error)?;
+    let conn = state.pool.get().await.map_err(internal_error)?;
 
     let new_contact = NewContact {
         id: Uuid::new_v4(),
         external_id: payload.external_id,
         phone_number: payload.phone_number,
-        date_created: chrono::Utc::now(),
-        date_updated: chrono::Utc::now(),
+        date_created: Utc::now(),
+        date_updated: Utc::now(),
     };
 
-    diesel::insert_into(contacts)
-        .values(&new_contact)
-        .get_result(&mut conn)
-        .map(|contact| (StatusCode::CREATED, Json(contact)))
-        .map_err(internal_error)
+    conn.interact(|conn| {
+        insert_into(contacts)
+            .values(&new_contact)
+            .get_result::<Contact>(conn)
+    })
+    .await
+    .map_err(internal_error)?
+    .map(|contact| (StatusCode::CREATED, Json(contact)))
+    .map_err(internal_error)
 }
 
-async fn get_contacts(
+async fn list_contacts(
     State(state): State<Arc<AppState>>,
     Query(params): Query<QueryParams>,
-) -> Result<Json<Vec<Contact>>, (axum::http::StatusCode, String)> {
+) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
     use schema::contacts::dsl::*;
 
-    let mut conn = state.pool.get().map_err(internal_error)?;
+    let conn = state.pool.get().await.map_err(internal_error)?;
 
     let mut query = contacts.into_boxed();
 
@@ -125,28 +144,29 @@ async fn get_contacts(
         query = query.filter(phone_number.like(format!("%{}%", phone)));
     }
 
-    let limit_val = params.limit.unwrap_or(10000);
+    let limit_val = params.limit.unwrap_or(100);
     let offset_val = params.offset.unwrap_or(0);
 
-    query
-        .limit(limit_val)
-        .offset(offset_val)
-        .load(&mut conn)
-        .map(Json)
-        .map_err(internal_error)
+    conn.interact(move |conn| {
+        query
+            .limit(limit_val)
+            .offset(offset_val)
+            .load::<Contact>(conn)
+    })
+    .await
+    .map_err(internal_error)?
+    .map(Json)
+    .map_err(internal_error)
 }
 
-async fn ping() -> &'static str {
-    "pong"
+fn create_pool(database_url: &str) -> Result<DbPool, DbError> {
+    let manager = deadpool_diesel::postgres::Manager::new(
+        database_url,
+        deadpool_diesel::Runtime::Tokio1,
+    );
+    Ok(deadpool_diesel::postgres::Pool::builder(manager).build()?)
 }
 
-fn establish_connection_pool(database_url: &str) -> DbPool {
-    let manager = ConnectionManager::<PgConnection>::new(database_url);
-    r2d2::Pool::builder()
-        .build(manager)
-        .expect("Failed to create pool.")
-}
-
-fn internal_error<E: std::fmt::Display>(err: E) -> (axum::http::StatusCode, String) {
-    (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("{}", err))
+fn internal_error<E: std::fmt::Display>(err: E) -> (StatusCode, String) {
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
 }
