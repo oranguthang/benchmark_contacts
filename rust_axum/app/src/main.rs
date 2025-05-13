@@ -8,8 +8,9 @@ use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
 use serde::{Deserialize, Serialize};
 use std::{env, net::SocketAddr, sync::Arc};
-use dotenvy::dotenv;
+use dotenv::dotenv;
 use uuid::Uuid;
+use tracing;
 use tracing_subscriber;
 use tower_http::trace::TraceLayer;
 
@@ -68,12 +69,10 @@ async fn main() {
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     tracing::info!("Listening on {}", addr);
 
-    axum::serve(
-        axum::Server::bind(&addr),
-        app.into_make_service()
-    )
-    .await
-    .unwrap();
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 }
 
 #[derive(Clone)]
@@ -93,13 +92,13 @@ async fn create_contact(
         id: Uuid::new_v4(),
         external_id: payload.external_id,
         phone_number: payload.phone_number,
-        date_created: chrono::Utc::now().naive_utc(),
-        date_updated: chrono::Utc::now().naive_utc(),
+        date_created: chrono::Utc::now(),
+        date_updated: chrono::Utc::now(),
     };
 
     diesel::insert_into(contacts)
         .values(&new_contact)
-        .get_result::<Contact>(&mut conn)
+        .get_result(&mut conn)
         .map(Json)
         .map_err(internal_error)
 }
@@ -128,7 +127,7 @@ async fn get_contacts(
     query
         .limit(limit_val)
         .offset(offset_val)
-        .load::<Contact>(&mut conn)
+        .load(&mut conn)
         .map(Json)
         .map_err(internal_error)
 }
