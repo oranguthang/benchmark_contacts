@@ -10,18 +10,14 @@ use deadpool_diesel::postgres::Pool;
 use diesel::{prelude::*, insert_into};
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, sync::Arc};
-use tower_http::{
-    compression::CompressionLayer,
-    trace::{DefaultMakeSpan, TraceLayer},
-};
+use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::{info, Level};
 use uuid::Uuid;
 
 mod schema;
 
-// Типы для базы данных
 type DbPool = deadpool_diesel::postgres::Pool;
-type DbError = Box<dyn std::error::Error + Send + Sync>;
+type DbResult<T> = Result<T, (StatusCode, String)>;
 
 #[derive(Debug, Serialize, Queryable)]
 struct Contact {
@@ -62,104 +58,96 @@ struct AppState {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), DbError> {
+async fn main() {
     tracing_subscriber::fmt()
         .with_max_level(Level::INFO)
         .init();
 
-    dotenv::dotenv().ok();
-    let database_url = std::env::var("DATABASE_URL")?;
+    let database_url = std::env::var("DATABASE_URL")
+        .expect("DATABASE_URL must be set");
 
-    let pool = create_pool(&database_url)?;
-    let app_state = Arc::new(AppState { pool });
+    let pool = create_pool(&database_url)
+        .expect("Failed to create pool");
 
     let app = Router::new()
-        .route("/ping", get(ping_handler))
+        .route("/ping", get(|| async { "pong" }))
         .route("/contacts",
             post(create_contact)
             .get(list_contacts)
         )
-        .with_state(app_state)
+        .with_state(Arc::new(AppState { pool }))
         .layer(
             TraceLayer::new_for_http()
-                .make_span_with(DefaultMakeSpan::new().include_headers(true))
-        )
-        .layer(CompressionLayer::new());
+                .make_span_with(DefaultMakeSpan::new().include_headers(false))
+        );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    info!("Server listening on {}", addr);
+    info!("Listening on {}", addr);
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
-        .await?;
-    Ok(())
-}
-
-async fn ping_handler() -> &'static str {
-    "pong"
+        .await
+        .unwrap();
 }
 
 async fn create_contact(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<ContactCreate>,
-) -> Result<(StatusCode, Json<Contact>), (StatusCode, String)> {
+) -> DbResult<(StatusCode, Json<Contact>)> {
     use schema::contacts::dsl::*;
 
     let conn = state.pool.get().await.map_err(internal_error)?;
 
-    let new_contact = NewContact {
-        id: Uuid::new_v4(),
-        external_id: payload.external_id,
-        phone_number: payload.phone_number,
-        date_created: Utc::now(),
-        date_updated: Utc::now(),
-    };
-
-    conn.interact(|conn| {
+    let contact = conn.interact(move |conn| {
         insert_into(contacts)
-            .values(&new_contact)
+            .values(NewContact {
+                id: Uuid::new_v4(),
+                external_id: payload.external_id,
+                phone_number: payload.phone_number,
+                date_created: Utc::now(),
+                date_updated: Utc::now(),
+            })
             .get_result::<Contact>(conn)
     })
     .await
     .map_err(internal_error)?
-    .map(|contact| (StatusCode::CREATED, Json(contact)))
-    .map_err(internal_error)
+    .map_err(internal_error)?;
+
+    Ok((StatusCode::CREATED, Json(contact)))
 }
 
 async fn list_contacts(
     State(state): State<Arc<AppState>>,
     Query(params): Query<QueryParams>,
-) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
+) -> DbResult<Json<Vec<Contact>>> {
     use schema::contacts::dsl::*;
 
     let conn = state.pool.get().await.map_err(internal_error)?;
 
-    let mut query = contacts.into_boxed();
+    let contacts = conn.interact(move |conn| {
+        let mut query = contacts.into_boxed();
 
-    if let Some(ext_id) = params.external_id {
-        query = query.filter(external_id.eq(ext_id));
-    }
+        if let Some(ext_id) = params.external_id {
+            query = query.filter(external_id.eq(ext_id));
+        }
 
-    if let Some(ref phone) = params.phone_number {
-        query = query.filter(phone_number.like(format!("%{}%", phone)));
-    }
+        if let Some(phone) = params.phone_number {
+            query = query.filter(phone_number.like(format!("%{phone}%")));
+        }
 
-    let limit_val = params.limit.unwrap_or(100);
-    let offset_val = params.offset.unwrap_or(0);
-
-    conn.interact(move |conn| {
         query
-            .limit(limit_val)
-            .offset(offset_val)
+            .limit(params.limit.unwrap_or(100))
+            .offset(params.offset.unwrap_or(0))
             .load::<Contact>(conn)
     })
     .await
     .map_err(internal_error)?
-    .map(Json)
-    .map_err(internal_error)
+    .map_err(internal_error)?;
+
+    Ok(Json(contacts))
 }
 
-fn create_pool(database_url: &str) -> Result<DbPool, DbError> {
+fn create_pool(database_url: &str) -> Result<DbPool, Box<dyn std::error::Error>> {
     let manager = deadpool_diesel::postgres::Manager::new(
         database_url,
         deadpool_diesel::Runtime::Tokio1,
