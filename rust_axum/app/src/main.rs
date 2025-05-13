@@ -6,7 +6,7 @@ use axum::{
 };
 use chrono::Utc;
 use diesel::{prelude::*, insert_into};
-use diesel_async::{AsyncPgConnection, RunQueryDsl};
+use diesel_async::{pooled_connection::bb8::Pool, AsyncPgConnection, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 mod schema;
 
-type DbPool = bb8::Pool<diesel_async::AsyncPgConnectionManager>;
+type DbPool = Pool<AsyncPgConnection>;
 
 #[derive(Debug, Serialize, Queryable)]
 struct Contact {
@@ -66,8 +66,8 @@ async fn main() {
     let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set");
 
-    let manager = diesel_async::AsyncPgConnectionManager::new(database_url);
-    let pool = bb8::Pool::builder()
+    let manager = diesel_async::pooled_connection::AsyncDieselConnectionManager::<AsyncPgConnection>::new(database_url);
+    let pool = Pool::builder()
         .build(manager)
         .await
         .expect("Failed to create pool");
@@ -99,7 +99,7 @@ async fn create_contact(
     State(state): State<AppState>,
     Json(payload): Json<ContactCreate>,
 ) -> Result<(StatusCode, Json<Contact>), (StatusCode, String)> {
-    use schema::contacts::dsl::*;
+    use schema::contacts::dsl::contacts;
 
     let mut conn = state.pool.get().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -123,7 +123,7 @@ async fn list_contacts(
     State(state): State<AppState>,
     Query(params): Query<QueryParams>,
 ) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
-    use schema::contacts::dsl::*;
+    use schema::contacts::dsl::{contacts, external_id, phone_number};
 
     let mut conn = state.pool.get().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -138,12 +138,12 @@ async fn list_contacts(
         query = query.filter(phone_number.like(format!("%{phone}%")));
     }
 
-    let contacts = query
+    let result = query
         .limit(params.limit.unwrap_or(100))
         .offset(params.offset.unwrap_or(0))
         .load::<Contact>(&mut conn)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(contacts))
+    Ok(Json(result))
 }
