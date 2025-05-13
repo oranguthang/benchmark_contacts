@@ -3,6 +3,8 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use axum::serve;
+use tokio::net::TcpListener;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
@@ -67,10 +69,10 @@ async fn main() {
         .layer(TraceLayer::new_for_http());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    let listener = TcpListener::bind(&addr).await.unwrap();
     tracing::info!("Listening on {}", addr);
 
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+    serve(listener, app)
         .await
         .unwrap();
 }
