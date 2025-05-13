@@ -10,7 +10,7 @@ serde_json = "1.0"
 tokio = { version = "1.37", features = ["full"] }
 uuid = { version = "1.8", features = ["serde", "v4"] }
 dotenv = "0.15"
-diesel = { version = "2.1", features = ["postgres", "r2d2", "uuidv07", "chrono"] }
+diesel = { version = "2.2", features = ["postgres", "r2d2", "chrono"] }
 r2d2 = "0.8"
 tower-http = "0.5"
 thiserror = "1.0"
