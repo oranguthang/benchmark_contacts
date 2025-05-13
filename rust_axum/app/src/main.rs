@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
-use tracing::{info, Level};
+use tracing::Level;
 use uuid::Uuid;
 use num_cpus;
 
@@ -98,10 +98,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let listener = TcpListener::bind(addr).await?;
 
         tracing::info!(
-            "Server started on {} (worker threads: {}, blocking threads: {})",
+            "Server started on {} (worker threads: {})",
             addr,
-            tokio::runtime::Handle::current().metrics().num_workers(),
-            tokio::runtime::Handle::current().metrics().num_blocking_threads()
+            tokio::runtime::Handle::current().metrics().num_workers()
         );
 
         axum::serve(listener, app).await?;
