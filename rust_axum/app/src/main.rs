@@ -5,40 +5,21 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
-use diesel::{
-    prelude::*
-};
-use diesel_async::{
-    pooled_connection::bb8::Pool,
-    AsyncPgConnection,
-    RunQueryDsl,
-};
 use serde::{Deserialize, Serialize};
+use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::Level;
 use uuid::Uuid;
-use num_cpus;
 
-mod schema;
-
-type DbPool = Pool<AsyncPgConnection>;
-
-#[derive(Debug, Serialize, Queryable)]
+#[derive(Debug, Serialize)]
 struct Contact {
     id: Uuid,
     external_id: i32,
     phone_number: String,
     date_created: chrono::DateTime<Utc>,
     date_updated: chrono::DateTime<Utc>,
-}
-
-#[derive(Debug, Deserialize, Insertable)]
-#[diesel(table_name = schema::contacts)]
-struct NewContact {
-    external_id: i32,
-    phone_number: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -57,53 +38,43 @@ struct QueryParams {
 
 #[derive(Clone)]
 struct AppState {
-    db_pool: DbPool,
+    db_pool: PgPool,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    std::panic::set_hook(Box::new(|panic_info| {
-        eprintln!(
-            "Custom panic occurred: {}\nLocation: {:?}",
-            panic_info,
-            panic_info.location()
-        );
-    }));
-
-    let tokio_runtime = tokio::runtime::Builder::new_multi_thread()
+fn main() -> anyhow::Result<()> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(num_cpus::get())
         .max_blocking_threads(num_cpus::get() * 2)
         .enable_all()
         .build()?;
 
-    tokio_runtime.block_on(async {
-        tracing_subscriber::fmt()
-            .with_max_level(Level::INFO)
-            .init();
+    runtime.block_on(async_main())
+}
 
-        let db_pool = create_db_pool().await;
-        let app_state = AppState { db_pool };
+async fn async_main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_max_level(Level::INFO)
+        .init();
 
-        let app = Router::new()
-            .route("/ping", get(ping))
-            .route("/contacts",
-                post(create_contact)
-                .get(list_contacts)
-            )
-            .with_state(app_state)
-            .layer(TraceLayer::new_for_http());
+    let db_pool = PgPoolOptions::new()
+        .max_connections((num_cpus::get() * 4) as u32)
+        .connect(&std::env::var("DATABASE_URL")?)
+        .await?;
 
-        let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-        let listener = TcpListener::bind(addr).await?;
+    let app_state = AppState { db_pool };
 
-        tracing::info!(
-            "Server started on {} (worker threads: {})",
-            addr,
-            tokio::runtime::Handle::current().metrics().num_workers()
-        );
+    let app = Router::new()
+        .route("/ping", get(ping))
+        .route("/contacts", post(create_contact).get(list_contacts))
+        .with_state(app_state)
+        .layer(TraceLayer::new_for_http());
 
-        axum::serve(listener, app).await?;
-        Ok(())
-    })
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    let listener = TcpListener::bind(addr).await?;
+    tracing::info!("Server started on {}", addr);
+
+    axum::serve(listener, app).await?;
+    Ok(())
 }
 
 async fn ping() -> &'static str {
@@ -114,75 +85,59 @@ async fn create_contact(
     State(state): State<AppState>,
     Json(payload): Json<ContactCreate>,
 ) -> Result<(StatusCode, Json<Contact>), (StatusCode, String)> {
-    use schema::contacts::dsl::contacts;
-
-    let mut conn = state.db_pool.get().await.map_err(db_error)?;
-
-    let new_contact = NewContact {
-        external_id: payload.external_id,
-        phone_number: payload.phone_number,
-    };
-
-    let contact = diesel::insert_into(contacts)
-        .values(&new_contact)
-        .get_result::<Contact>(&mut conn)
-        .await
-        .map_err(db_error)?;
+    let contact = sqlx::query_as!(
+        Contact,
+        r#"
+        INSERT INTO contacts (external_id, phone_number)
+        VALUES ($1, $2)
+        RETURNING id, external_id, phone_number, date_created, date_updated
+        "#,
+        payload.external_id,
+        payload.phone_number
+    )
+    .fetch_one(&state.db_pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok((StatusCode::CREATED, Json(contact)))
 }
-
 
 async fn list_contacts(
     State(state): State<AppState>,
     Query(params): Query<QueryParams>,
 ) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
-    let mut conn = state.db_pool.get().await.map_err(db_error)?;
-
-    let mut sql = String::from("SELECT * FROM contacts WHERE 1=1");
-    let mut bindings: Vec<(String, String)> = Vec::new();
+    let mut sql = String::from("SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE 1=1");
+    let mut bindings: Vec<(String, sqlx::types::Type, Box<dyn sqlx::Encode<'_, sqlx::Postgres> + Send + Sync>)> = vec![];
 
     if let Some(ext_id) = params.external_id {
         sql.push_str(" AND external_id = $1");
-        bindings.push(("external_id".to_string(), ext_id.to_string()));
+        bindings.push((
+            "external_id".into(),
+            sqlx::types::Type::INT4,
+            Box::new(ext_id),
+        ));
     }
 
     if let Some(ref phone) = params.phone_number {
         sql.push_str(" AND phone_number ILIKE $2");
-        bindings.push(("phone_number".to_string(), format!("%{}%", phone)));
+        bindings.push((
+            "phone_number".into(),
+            sqlx::types::Type::TEXT,
+            Box::new(format!("%{}%", phone)),
+        ));
     }
 
-    let limit_value = params.limit.unwrap_or(100);
-    let offset_value = params.offset.unwrap_or(0);
+    sql.push_str(" ORDER BY date_created DESC");
+    sql.push_str(&format!(
+        " LIMIT {} OFFSET {}",
+        params.limit.unwrap_or(100),
+        params.offset.unwrap_or(0)
+    ));
 
-    sql.push_str(&format!(" LIMIT {} OFFSET {}", limit_value, offset_value));
-
-    let mut query = diesel::sql_query(sql);
-
-    for (i, (_, value)) in bindings.iter().enumerate() {
-        query = query.bind::<diesel::sql_types::Text, _>(value);
-    }
-
-    let results = query
-        .load::<Contact>(&mut conn)
+    let contacts = sqlx::query_as::<_, Contact>(&sql)
+        .fetch_all(&state.db_pool)
         .await
-        .map_err(db_error)?;
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(results))
-}
-
-
-async fn create_db_pool() -> DbPool {
-    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let manager = diesel_async::pooled_connection::AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
-
-    Pool::builder()
-        .max_size((num_cpus::get() * 4).try_into().unwrap())
-        .build(manager)
-        .await
-        .expect("Failed to create DB pool")
-}
-
-fn db_error<E: std::fmt::Display>(err: E) -> (StatusCode, String) {
-    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+    Ok(Json(contacts))
 }
