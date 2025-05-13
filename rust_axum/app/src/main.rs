@@ -85,7 +85,16 @@ async fn main() {
     let listener = TcpListener::bind(addr).await.unwrap();
 
     info!("Server running on {}", addr);
-    axum::serve(listener, app).await.unwrap();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(num_cpus::get())
+        .max_blocking_threads(num_cpus::get())
+        .enable_all()
+        .build()
+        .unwrap();
+
+    runtime.block_on(async {
+        axum::serve(listener, app).await.unwrap();
+    });
 }
 
 async fn ping() -> &'static str {
@@ -146,6 +155,7 @@ async fn create_db_pool() -> DbPool {
     let manager = diesel_async::pooled_connection::AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
 
     Pool::builder()
+        .max_size(num_cpus::get() * 4)
         .build(manager)
         .await
         .expect("Failed to create DB pool")
