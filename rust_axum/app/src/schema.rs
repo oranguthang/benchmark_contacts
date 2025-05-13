@@ -1,11 +1,9 @@
-use diesel::sql_types::Uuid;
-
 diesel::table! {
     contacts (id) {
         id -> Uuid,
         external_id -> Int4,
-        phone_number -> Varchar,
-        date_created -> Timestamp,
-        date_updated -> Timestamp,
+        phone_number -> Text,
+        date_created -> Timestamptz,
+        date_updated -> Timestamptz,
     }
 }
