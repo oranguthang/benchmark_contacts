@@ -20,6 +20,6 @@ RUN RUSTFLAGS="-C target-cpu=native" cargo build --release && \
     strip target/release/rust_axum
 
 ENV RUST_LOG=info
-ENV TOKIO_WORKER_THREADS=8
+ENV CPU_CORES=8
 
 CMD ["target/release/rust_axum"]

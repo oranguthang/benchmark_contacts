@@ -58,9 +58,14 @@ struct AppState {
 }
 
 fn main() -> anyhow::Result<()> {
+    let worker_threads = std::env::var("CPU_CORES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or_else(num_cpus::get);
+
     let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(num_cpus::get())
-        .max_blocking_threads(num_cpus::get() * 2)
+        .worker_threads(worker_threads)
+        .max_blocking_threads(worker_threads * 2)
         .enable_all()
         .build()?;
 
