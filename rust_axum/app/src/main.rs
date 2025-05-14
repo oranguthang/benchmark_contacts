@@ -7,6 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::{
     postgres::PgPoolOptions,
+    types::chrono::{DateTime, Utc},
     PgPool, Row,
 };
 use std::net::SocketAddr;
@@ -14,7 +15,6 @@ use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::Level;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize)]
 struct Contact {
@@ -125,12 +125,12 @@ async fn list_contacts(
     let mut conditions = Vec::new();
     let mut bind_counter = 1;
 
-    if let Some(ext_id) = params.external_id {
+    if let Some(_ext_id) = params.external_id {
         conditions.push(format!("external_id = ${}", bind_counter));
         bind_counter += 1;
     }
 
-    if let Some(phone) = params.phone_number {
+    if let Some(ref phone) = params.phone_number {
         conditions.push(format!("phone_number ILIKE ${}", bind_counter));
         bind_counter += 1;
     }
