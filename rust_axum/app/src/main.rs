@@ -129,40 +129,26 @@ async fn list_contacts(
     State(state): State<AppState>,
     Query(params): Query<QueryParams>,
 ) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
-    let mut query = "
-        SELECT id, external_id, phone_number, date_created, date_updated
-        FROM contacts
-        WHERE TRUE
-    ".to_string();
-
-    let mut args = PgArguments::default();
+    let mut builder = sqlx::QueryBuilder::new(
+        "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE TRUE",
+    );
 
     if let Some(external_id) = params.external_id {
-        query.push_str(" AND external_id = $1");
-        args.add(external_id);
+        builder.push(" AND external_id = ").push_bind(external_id);
     }
 
     if let Some(ref phone_number) = params.phone_number {
-        query.push_str(" AND phone_number = $2");
-        args.add(phone_number);
+        builder.push(" AND phone_number = ").push_bind(phone_number);
     }
 
     let limit = params.limit.unwrap_or(10000).min(10000);
     let offset = params.offset.unwrap_or(0);
 
-    query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+    builder.push(&format!(" LIMIT {} OFFSET {}", limit, offset));
 
-    let mut query_builder = sqlx::query_as::<_, Contact>(&query);
+    let query = builder.build_query_as::<Contact>();
 
-    if let Some(external_id) = params.external_id {
-        query_builder = query_builder.bind(external_id);
-    }
-
-    if let Some(phone_number) = params.phone_number {
-        query_builder = query_builder.bind(phone_number);
-    }
-
-    let rows = query_builder
+    let rows = query
         .fetch_all(&state.db_pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
