@@ -41,7 +41,7 @@ build-java:
 	docker-compose -f $(COMPOSE_FILE) build $(JAVA_SERVICES)
 
 build-rust:
-	DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose -f $(COMPOSE_FILE) build $(RUST_SERVICES)
+	docker-compose -f $(COMPOSE_FILE) build $(RUST_SERVICES)
 
 build-go:
 	docker-compose -f $(COMPOSE_FILE) build $(GO_SERVICES)
