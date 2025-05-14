@@ -16,7 +16,6 @@ use tower_http::trace::TraceLayer;
 use tracing::Level;
 use uuid::Uuid;
 use sqlx::postgres::PgArguments;
-use sqlx::Arguments;
 
 #[derive(Debug, Serialize)]
 struct Contact {
@@ -137,18 +136,15 @@ async fn list_contacts(
     ".to_string();
 
     let mut args = PgArguments::default();
-    let mut arg_idx = 1;
 
     if let Some(external_id) = params.external_id {
-        query.push_str(&format!(" AND external_id = ${}", arg_idx));
+        query.push_str(" AND external_id = $1");
         args.add(external_id);
-        arg_idx += 1;
     }
 
-    if let Some(phone_number) = params.phone_number {
-        query.push_str(&format!(" AND phone_number = ${}", arg_idx));
+    if let Some(ref phone_number) = params.phone_number {
+        query.push_str(" AND phone_number = $2");
         args.add(phone_number);
-        arg_idx += 1;
     }
 
     let limit = params.limit.unwrap_or(10000).min(10000);
@@ -158,8 +154,12 @@ async fn list_contacts(
 
     let mut query_builder = sqlx::query_as::<_, Contact>(&query);
 
-    for arg in args {
-        query_builder = query_builder.bind(arg);
+    if let Some(external_id) = params.external_id {
+        query_builder = query_builder.bind(external_id);
+    }
+
+    if let Some(phone_number) = params.phone_number {
+        query_builder = query_builder.bind(phone_number);
     }
 
     let rows = query_builder
