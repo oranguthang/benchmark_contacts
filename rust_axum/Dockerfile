@@ -22,5 +22,6 @@ RUN RUSTFLAGS="-C target-cpu=native" cargo build --release && \
 
 ENV RUST_LOG=info
 ENV CPU_CORES=8
+ENV SQLX_OFFLINE=true
 
 CMD ["target/release/rust_axum"]
