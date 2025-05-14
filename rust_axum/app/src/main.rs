@@ -15,27 +15,18 @@ use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::Level;
 use uuid::Uuid;
-use sqlx::postgres::PgArguments;
+use sqlx::QueryBuilder;
 
-#[derive(Debug, Serialize)]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
 struct Contact {
     id: Uuid,
     external_id: i32,
     phone_number: String,
     date_created: DateTime<Utc>,
     date_updated: DateTime<Utc>,
-}
-
-impl<'r> FromRow<'r, sqlx::postgres::PgRow> for Contact {
-    fn from_row(row: &'r sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
-        Ok(Contact {
-            id: row.get("id"),
-            external_id: row.get("external_id"),
-            phone_number: row.get("phone_number"),
-            date_created: row.get("date_created"),
-            date_updated: row.get("date_updated"),
-        })
-    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -106,36 +97,30 @@ async fn create_contact(
     State(state): State<AppState>,
     Json(payload): Json<ContactCreate>,
 ) -> Result<(StatusCode, Json<Contact>), (StatusCode, String)> {
-    let row = sqlx::query(
+    let contact = sqlx::query_as!(
+        Contact,
         r#"
         INSERT INTO contacts (external_id, phone_number)
         VALUES ($1, $2)
         RETURNING id, external_id, phone_number, date_created, date_updated
         "#,
+        payload.external_id,
+        payload.phone_number
     )
-    .bind(payload.external_id)
-    .bind(payload.phone_number)
     .fetch_one(&state.db_pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let contact = Contact {
-        id: row.get("id"),
-        external_id: row.get("external_id"),
-        phone_number: row.get("phone_number"),
-        date_created: row.get("date_created"),
-        date_updated: row.get("date_updated"),
-    };
-
     Ok((StatusCode::CREATED, Json(contact)))
 }
+
 
 async fn list_contacts(
     State(state): State<AppState>,
     Query(params): Query<QueryParams>,
 ) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
-    let mut builder = sqlx::QueryBuilder::new(
-        "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE TRUE",
+    let mut builder = QueryBuilder::new(
+        "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE TRUE"
     );
 
     if let Some(external_id) = params.external_id {
@@ -149,14 +134,15 @@ async fn list_contacts(
     let limit = params.limit.unwrap_or(10000).min(10000);
     let offset = params.offset.unwrap_or(0);
 
-    builder.push(&format!(" LIMIT {} OFFSET {}", limit, offset));
+    builder.push(" LIMIT ").push_bind(limit);
+    builder.push(" OFFSET ").push_bind(offset);
 
     let query = builder.build_query_as::<Contact>();
 
-    let rows = query
+    let contacts = query
         .fetch_all(&state.db_pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(rows))
+    Ok(Json(contacts))
 }
