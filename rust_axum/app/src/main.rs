@@ -7,7 +7,6 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::{
     postgres::PgPoolOptions,
-    types::chrono::{DateTime, Utc},
     PgPool, Row,
 };
 use std::net::SocketAddr;
@@ -15,6 +14,7 @@ use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::Level;
 use uuid::Uuid;
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize)]
 struct Contact {
@@ -162,7 +162,7 @@ async fn list_contacts(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let contacts = rows
-        .into_iter()
+        .iter()
         .map(|row| Contact {
             id: row.get("id"),
             external_id: row.get("external_id"),
