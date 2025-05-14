@@ -4,3 +4,4 @@ SQLAlchemy
 alembic
 pydantic
 python-dotenv
+gunicorn
