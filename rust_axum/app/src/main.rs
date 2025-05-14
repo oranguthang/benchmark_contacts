@@ -8,13 +8,15 @@ use serde::{Deserialize, Serialize};
 use sqlx::{
     postgres::PgPoolOptions,
     types::chrono::{DateTime, Utc},
-    PgPool, Row,
+    FromRow, PgPool, Row,
 };
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::Level;
 use uuid::Uuid;
+use sqlx::postgres::PgArguments;
+use sqlx::Arguments;
 
 #[derive(Debug, Serialize)]
 struct Contact {
@@ -23,6 +25,18 @@ struct Contact {
     phone_number: String,
     date_created: DateTime<Utc>,
     date_updated: DateTime<Utc>,
+}
+
+impl<'r> FromRow<'r, sqlx::postgres::PgRow> for Contact {
+    fn from_row(row: &'r sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+        Ok(Contact {
+            id: row.get("id"),
+            external_id: row.get("external_id"),
+            phone_number: row.get("phone_number"),
+            date_created: row.get("date_created"),
+            date_updated: row.get("date_updated"),
+        })
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -122,18 +136,18 @@ async fn list_contacts(
         WHERE TRUE
     ".to_string();
 
-    let mut args = Vec::new();
+    let mut args = PgArguments::default();
     let mut arg_idx = 1;
 
     if let Some(external_id) = params.external_id {
         query.push_str(&format!(" AND external_id = ${}", arg_idx));
-        args.push(external_id);
+        args.add(external_id);
         arg_idx += 1;
     }
 
     if let Some(phone_number) = params.phone_number {
         query.push_str(&format!(" AND phone_number = ${}", arg_idx));
-        args.push(phone_number);
+        args.add(phone_number);
         arg_idx += 1;
     }
 
@@ -142,8 +156,13 @@ async fn list_contacts(
 
     query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
 
-    let rows = sqlx::query_as::<_, Contact>(&query)
-        .bind_all(args)
+    let mut query_builder = sqlx::query_as::<_, Contact>(&query);
+
+    for arg in args {
+        query_builder = query_builder.bind(arg);
+    }
+
+    let rows = query_builder
         .fetch_all(&state.db_pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
