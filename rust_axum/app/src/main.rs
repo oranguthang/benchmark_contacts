@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{
     postgres::PgPoolOptions,
     types::chrono::{DateTime, Utc},
-    FromRow, PgPool, Row,
+    PgPool
 };
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
