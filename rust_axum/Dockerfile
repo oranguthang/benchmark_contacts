@@ -1,25 +1,25 @@
-FROM rust:1.82
-
-RUN apt-get update && \
-    apt-get install -y \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
+FROM rust:1.82 as chef
+RUN cargo install cargo-chef
 WORKDIR /app
+COPY ./app .
+RUN cargo chef prepare --recipe-path recipe.json
 
-COPY ./app/Cargo.toml ./
+FROM rust:1.82 as builder
+RUN apt-get update && apt-get install -y libpq-dev
+WORKDIR /app
+COPY --from=chef /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
 
-RUN mkdir -p src && \
-    echo "fn main() {}" > src/main.rs && \
-    cargo build --release && \
-    rm -rf target/release/deps/rust_axum*
-
-COPY ./app/src ./src
-
+COPY ./app .
 RUN RUSTFLAGS="-C target-cpu=native" cargo build --release && \
     strip target/release/rust_axum
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=builder /app/target/release/rust_axum /app/rust_axum
 
 ENV RUST_LOG=info
 ENV CPU_CORES=8
 
-CMD ["target/release/rust_axum"]
+CMD ["./rust_axum"]
