@@ -9,6 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ./app /app
 
+ENV CPU_CORES=8
+
 EXPOSE 8080
 
 CMD ["python", "main.py"]
