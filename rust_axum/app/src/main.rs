@@ -119,58 +119,34 @@ async fn list_contacts(
     let mut query = "
         SELECT id, external_id, phone_number, date_created, date_updated
         FROM contacts
-        WHERE 1=1
+        WHERE TRUE
     ".to_string();
 
-    let mut conditions = Vec::new();
-    let mut bind_counter = 1;
+    let mut args = Vec::new();
+    let mut arg_idx = 1;
 
-    if let Some(_ext_id) = params.external_id {
-        conditions.push(format!("external_id = ${}", bind_counter));
-        bind_counter += 1;
+    if let Some(external_id) = params.external_id {
+        query.push_str(&format!(" AND external_id = ${}", arg_idx));
+        args.push(external_id);
+        arg_idx += 1;
     }
 
-    if let Some(ref phone) = params.phone_number {
-        conditions.push(format!("phone_number ILIKE ${}", bind_counter));
-        bind_counter += 1;
+    if let Some(phone_number) = params.phone_number {
+        query.push_str(&format!(" AND phone_number = ${}", arg_idx));
+        args.push(phone_number);
+        arg_idx += 1;
     }
 
-    if !conditions.is_empty() {
-        query.push_str(" AND ");
-        query.push_str(&conditions.join(" AND "));
-    }
+    let limit = params.limit.unwrap_or(10000).min(10000);
+    let offset = params.offset.unwrap_or(0);
 
-    query.push_str(&format!(
-        " ORDER BY date_created DESC LIMIT {} OFFSET {}",
-        params.limit.unwrap_or(100),
-        params.offset.unwrap_or(0)
-    ));
+    query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
 
-    let mut query_builder = sqlx::query(&query);
-
-    if let Some(ext_id) = params.external_id {
-        query_builder = query_builder.bind(ext_id);
-    }
-
-    if let Some(phone) = params.phone_number {
-        query_builder = query_builder.bind(format!("%{}%", phone));
-    }
-
-    let rows = query_builder
+    let rows = sqlx::query_as::<_, Contact>(&query)
+        .bind_all(args)
         .fetch_all(&state.db_pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let contacts = rows
-        .iter()
-        .map(|row| Contact {
-            id: row.get("id"),
-            external_id: row.get("external_id"),
-            phone_number: row.get("phone_number"),
-            date_created: row.get("date_created"),
-            date_updated: row.get("date_updated"),
-        })
-        .collect();
-
-    Ok(Json(contacts))
+    Ok(Json(rows))
 }
