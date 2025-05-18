@@ -1,6 +1,6 @@
 FROM php:8.1-cli-alpine
 
-RUN apk add --no-cache libpng libjpeg libfreetype && \
+RUN apk add --no-cache libpng libjpeg freetype && \
     docker-php-ext-configure gd --with-freetype --with-jpeg && \
     docker-php-ext-install gd pdo pdo_pgsql
 
