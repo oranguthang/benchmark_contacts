@@ -91,7 +91,9 @@ int main() {
     }
 
     printf("Server running on port %d\n", PORT);
-    getchar(); // wait for user input to stop server
+    while (1) {
+        sleep(1);
+    }
 
     MHD_stop_daemon(daemon);
     PQfinish(conn);
