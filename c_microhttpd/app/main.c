@@ -14,11 +14,20 @@ typedef struct {
     size_t size;
 } ConnectionInfo;
 
-static int
-answer_to_connection(void *cls, struct MHD_Connection *connection,
-                     const char *url, const char *method,
-                     const char *version, const char *upload_data,
-                     size_t *upload_data_size, void **con_cls) {
+static enum MHD_Result handle_get_contacts(struct MHD_Connection *connection,
+                                           const char *url,
+                                           const char *method,
+                                           const char *version,
+                                           const char *upload_data,
+                                           size_t *upload_data_size,
+                                           void **con_cls);
+
+PGconn* get_pg_connection();
+
+enum MHD_Result answer_to_connection(void *cls, struct MHD_Connection *connection,
+                                     const char *url, const char *method,
+                                     const char *version, const char *upload_data,
+                                     size_t *upload_data_size, void **con_cls) {
     if (*con_cls == NULL) {
         ConnectionInfo *con_info = calloc(1, sizeof(ConnectionInfo));
         *con_cls = (void *)con_info;
@@ -123,6 +132,10 @@ answer_to_connection(void *cls, struct MHD_Connection *connection,
         return MHD_YES;
     }
 
+    if (strcmp(method, "GET") == 0 && strcmp(url, "/contacts") == 0) {
+        return handle_get_contacts(connection, url, method, version, upload_data, upload_data_size, con_cls);
+    }
+
     const char *page = "Not found";
     struct MHD_Response *response = MHD_create_response_from_buffer(strlen(page),
                                                                     (void*)page,
@@ -132,6 +145,100 @@ answer_to_connection(void *cls, struct MHD_Connection *connection,
     return ret;
 
     return MHD_NO;
+}
+
+static enum MHD_Result handle_get_contacts(struct MHD_Connection *connection,
+                               const char *url,
+                               const char *method,
+                               const char *version,
+                               const char *upload_data,
+                               size_t *upload_data_size,
+                               void **con_cls)
+{
+    PGconn *conn = get_pg_connection();
+    if (!conn) {
+        const char *err = "DB connection error";
+        struct MHD_Response *response = MHD_create_response_from_buffer(strlen(err), (void*)err, MHD_RESPMEM_PERSISTENT);
+        int ret = MHD_queue_response(connection, MHD_HTTP_INTERNAL_SERVER_ERROR, response);
+        MHD_destroy_response(response);
+        return ret;
+    }
+
+    // Получаем параметры
+    const char *external_id = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "external_id");
+    const char *phone_number = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "phone_number");
+    const char *limit = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "limit");
+    const char *offset = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "offset");
+
+    char query[1024];
+    snprintf(query, sizeof(query), "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE 1=1");
+
+    if (external_id) {
+        strcat(query, " AND external_id = ");
+        strcat(query, external_id);
+    }
+    if (phone_number) {
+        strcat(query, " AND phone_number = '");
+        strcat(query, phone_number);
+        strcat(query, "'");
+    }
+    if (limit) {
+        strcat(query, " LIMIT ");
+        strcat(query, limit);
+    }
+    if (offset) {
+        strcat(query, " OFFSET ");
+        strcat(query, offset);
+    }
+
+    PGresult *res = PQexec(conn, query);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        fprintf(stderr, "DB Error: %s\n", PQerrorMessage(conn));
+        const char *err = "DB error";
+        struct MHD_Response *response = MHD_create_response_from_buffer(strlen(err), (void*)err, MHD_RESPMEM_PERSISTENT);
+        int ret = MHD_queue_response(connection, MHD_HTTP_INTERNAL_SERVER_ERROR, response);
+        MHD_destroy_response(response);
+        PQclear(res);
+        return ret;
+    }
+
+    // Формируем JSON-список
+    json_t *contacts = json_array();
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; i++) {
+        json_t *contact = json_object();
+        json_object_set_new(contact, "id", json_string(PQgetvalue(res, i, 0)));
+        json_object_set_new(contact, "external_id", json_integer(atoi(PQgetvalue(res, i, 1))));
+        json_object_set_new(contact, "phone_number", json_string(PQgetvalue(res, i, 2)));
+        json_object_set_new(contact, "date_created", json_string(PQgetvalue(res, i, 3)));
+        json_object_set_new(contact, "date_updated", json_string(PQgetvalue(res, i, 4)));
+        json_array_append_new(contacts, contact);
+    }
+
+    char *resp_str = json_dumps(contacts, 0);
+    json_decref(contacts);
+    PQclear(res);
+    PQfinish(conn);
+
+    struct MHD_Response *response = MHD_create_response_from_buffer(strlen(resp_str), (void*)resp_str, MHD_RESPMEM_MUST_FREE);
+    int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
+    MHD_destroy_response(response);
+
+    return ret;
+}
+
+PGconn* get_pg_connection() {
+    // Например:
+    const char *conninfo = "host=db dbname=contacts_db user=user password=password";
+    PGconn *conn = PQconnectdb(conninfo);
+
+    if (PQstatus(conn) != CONNECTION_OK) {
+        fprintf(stderr, "Connection to database failed: %s", PQerrorMessage(conn));
+        PQfinish(conn);
+        return NULL;
+    }
+
+    return conn;
 }
 
 int main() {
