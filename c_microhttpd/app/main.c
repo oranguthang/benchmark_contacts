@@ -41,7 +41,7 @@ answer_to_connection(void *cls, struct MHD_Connection *connection,
             }
 
             const char *external_id = json_string_value(json_object_get(root, "external_id"));
-            const char *phone = json_string_value(json_object_get(root, "phone"));
+            const char *phone = json_string_value(json_object_get(root, "phone_number"));
 
             if (!external_id || !phone) {
                 json_decref(root);
