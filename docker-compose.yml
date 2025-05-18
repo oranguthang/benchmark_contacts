@@ -172,6 +172,26 @@ services:
     environment:
       BASE_URL: http://node_express:8080
 
+  c_microhttpd:
+    <<: *common_service
+    build: ./c_microhttpd
+
+  benchmark_tests_c:
+    <<: *common_benchmark_tests
+    depends_on:
+      c_microhttpd:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://c_microhttpd:8080
+
+  benchmark_c:
+    <<: *common_benchmark
+    depends_on:
+      c_microhttpd:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://c_microhttpd:8080
+
 networks:
   backend:
     driver: bridge
