@@ -15,7 +15,11 @@ $container->set('db', function() {
 $app->post('/contacts', function ($request, $response) use ($container) {
     $data = $request->getParsedBody();
     $stmt = $container->get('db')->prepare('INSERT INTO contacts (external_id, phone_number) VALUES (?, ?)');
-    $stmt->execute([$data['external_id'], $data['phone_number']]);
+    $success = $stmt->execute([$data['external_id'], $data['phone_number']]);
+    if (!$success) {
+        // Ошибка вставки
+        return $response->withStatus(500)->write('DB error');
+    }
     return $response->withStatus(201);
 });
 

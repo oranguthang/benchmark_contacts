@@ -2,7 +2,7 @@ FROM php:8.1-cli-alpine
 
 RUN apk add --no-cache --virtual .build-deps \
     autoconf gcc g++ make musl-dev pkgconf \
-    libpng-dev libjpeg-turbo-dev freetype-dev zlib-dev postgresql-dev && \
+    libpng-dev libjpeg-turbo-dev freetype-dev zlib-dev postgresql-dev postgresql-libs && \
     docker-php-ext-configure gd --with-freetype --with-jpeg && \
     docker-php-ext-install gd pdo pdo_pgsql && \
     apk del .build-deps
