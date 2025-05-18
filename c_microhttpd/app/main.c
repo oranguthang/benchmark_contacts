@@ -24,6 +24,7 @@ PGconn* get_pg_connection() {
     return conn;
 }
 
+// GET /contacts
 static enum MHD_Result handle_get_contacts(struct MHD_Connection *connection,
                                            const char *url,
                                            const char *method,
@@ -94,6 +95,112 @@ static enum MHD_Result handle_get_contacts(struct MHD_Connection *connection,
     return ret;
 }
 
+// GET /ping
+static enum MHD_Result handle_get_ping(struct MHD_Connection *connection) {
+    const char *page = "pong";
+    struct MHD_Response *response = MHD_create_response_from_buffer(strlen(page), (void*)page, MHD_RESPMEM_PERSISTENT);
+    MHD_add_response_header(response, "Content-Type", "text/plain");
+    int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
+    MHD_destroy_response(response);
+    return ret;
+}
+
+// POST /contacts
+static enum MHD_Result handle_post_contacts(struct MHD_Connection *connection,
+                                            const char *upload_data,
+                                            size_t *upload_data_size,
+                                            void **con_cls) {
+    ConnectionInfo *con_info = *con_cls;
+
+    if (*upload_data_size != 0) {
+        con_info->post_data = realloc(con_info->post_data, con_info->size + *upload_data_size + 1);
+        memcpy(con_info->post_data + con_info->size, upload_data, *upload_data_size);
+        con_info->size += *upload_data_size;
+        con_info->post_data[con_info->size] = '\0';
+        *upload_data_size = 0;
+        return MHD_YES;
+    }
+
+    json_error_t error;
+    json_t *root = json_loads(con_info->post_data, 0, &error);
+    if (!root) {
+        const char *err = "Invalid JSON";
+        struct MHD_Response *response = MHD_create_response_from_buffer(strlen(err), (void*)err, MHD_RESPMEM_PERSISTENT);
+        MHD_add_response_header(response, "Content-Type", "text/plain");
+        int ret = MHD_queue_response(connection, MHD_HTTP_BAD_REQUEST, response);
+        MHD_destroy_response(response);
+        goto cleanup;
+    }
+
+    json_t *external_id_json = json_object_get(root, "external_id");
+    json_t *phone_json = json_object_get(root, "phone_number");
+    if (!json_is_integer(external_id_json) || !json_is_string(phone_json)) {
+        const char *err = "Missing/invalid fields";
+        struct MHD_Response *response = MHD_create_response_from_buffer(strlen(err), (void*)err, MHD_RESPMEM_PERSISTENT);
+        MHD_add_response_header(response, "Content-Type", "text/plain");
+        int ret = MHD_queue_response(connection, MHD_HTTP_BAD_REQUEST, response);
+        MHD_destroy_response(response);
+        json_decref(root);
+        goto cleanup;
+    }
+
+    int external_id = json_integer_value(external_id_json);
+    const char *phone_number = json_string_value(phone_json);
+
+    PGconn *conn = get_pg_connection();
+    if (!conn) {
+        const char *err = "DB connection error";
+        struct MHD_Response *response = MHD_create_response_from_buffer(strlen(err), (void*)err, MHD_RESPMEM_PERSISTENT);
+        MHD_add_response_header(response, "Content-Type", "text/plain");
+        int ret = MHD_queue_response(connection, MHD_HTTP_INTERNAL_SERVER_ERROR, response);
+        MHD_destroy_response(response);
+        json_decref(root);
+        goto cleanup;
+    }
+
+    char query[512];
+    snprintf(query, sizeof(query),
+             "INSERT INTO contacts (external_id, phone_number) VALUES (%d, '%s') RETURNING id, date_created, date_updated",
+             external_id, phone_number);
+
+    PGresult *res = PQexec(conn, query);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        const char *err = "DB error";
+        struct MHD_Response *response = MHD_create_response_from_buffer(strlen(err), (void*)err, MHD_RESPMEM_PERSISTENT);
+        MHD_add_response_header(response, "Content-Type", "text/plain");
+        int ret = MHD_queue_response(connection, MHD_HTTP_INTERNAL_SERVER_ERROR, response);
+        MHD_destroy_response(response);
+        PQclear(res);
+        PQfinish(conn);
+        json_decref(root);
+        goto cleanup;
+    }
+
+    json_t *resp = json_object();
+    json_object_set_new(resp, "id", json_string(PQgetvalue(res, 0, 0)));
+    json_object_set_new(resp, "external_id", json_integer(external_id));
+    json_object_set_new(resp, "phone_number", json_string(phone_number));
+    json_object_set_new(resp, "date_created", json_string(PQgetvalue(res, 0, 1)));
+    json_object_set_new(resp, "date_updated", json_string(PQgetvalue(res, 0, 2)));
+
+    char *resp_str = json_dumps(resp, 0);
+    json_decref(resp);
+    PQclear(res);
+    PQfinish(conn);
+    json_decref(root);
+
+    struct MHD_Response *response = MHD_create_response_from_buffer(strlen(resp_str), resp_str, MHD_RESPMEM_MUST_FREE);
+    MHD_add_response_header(response, "Content-Type", "application/json");
+    int ret = MHD_queue_response(connection, MHD_HTTP_CREATED, response);
+    MHD_destroy_response(response);
+
+cleanup:
+    free(con_info->post_data);
+    free(con_info);
+    *con_cls = NULL;
+    return MHD_YES;
+}
+
 enum MHD_Result answer_to_connection(void *cls, struct MHD_Connection *connection,
                                      const char *url, const char *method,
                                      const char *version, const char *upload_data,
@@ -104,106 +211,11 @@ enum MHD_Result answer_to_connection(void *cls, struct MHD_Connection *connectio
         return MHD_YES;
     }
 
-    if (strcmp(method, "GET") == 0 && strcmp(url, "/ping") == 0) {
-        const char *page = "pong";
-        struct MHD_Response *response = MHD_create_response_from_buffer(strlen(page), (void*)page, MHD_RESPMEM_PERSISTENT);
-        MHD_add_response_header(response, "Content-Type", "text/plain");
-        int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
-        MHD_destroy_response(response);
-        return ret;
-    }
+    if (strcmp(method, "GET") == 0 && strcmp(url, "/ping") == 0)
+        return handle_get_ping(connection);
 
-    if (strcmp(method, "POST") == 0 && strcmp(url, "/contacts") == 0) {
-        ConnectionInfo *con_info = *con_cls;
-
-        if (*upload_data_size != 0) {
-            con_info->post_data = realloc(con_info->post_data, con_info->size + *upload_data_size + 1);
-            memcpy(con_info->post_data + con_info->size, upload_data, *upload_data_size);
-            con_info->size += *upload_data_size;
-            con_info->post_data[con_info->size] = '\0';
-            *upload_data_size = 0;
-            return MHD_YES;
-        }
-
-        json_error_t error;
-        json_t *root = json_loads(con_info->post_data, 0, &error);
-        if (!root) {
-            const char *err = "Invalid JSON";
-            struct MHD_Response *response = MHD_create_response_from_buffer(strlen(err), (void*)err, MHD_RESPMEM_PERSISTENT);
-            MHD_add_response_header(response, "Content-Type", "text/plain");
-            int ret = MHD_queue_response(connection, MHD_HTTP_BAD_REQUEST, response);
-            MHD_destroy_response(response);
-            goto cleanup;
-        }
-
-        json_t *external_id_json = json_object_get(root, "external_id");
-        json_t *phone_json = json_object_get(root, "phone_number");
-        if (!json_is_integer(external_id_json) || !json_is_string(phone_json)) {
-            const char *err = "Missing/invalid fields";
-            struct MHD_Response *response = MHD_create_response_from_buffer(strlen(err), (void*)err, MHD_RESPMEM_PERSISTENT);
-            MHD_add_response_header(response, "Content-Type", "text/plain");
-            int ret = MHD_queue_response(connection, MHD_HTTP_BAD_REQUEST, response);
-            MHD_destroy_response(response);
-            json_decref(root);
-            goto cleanup;
-        }
-
-        int external_id = json_integer_value(external_id_json);
-        const char *phone_number = json_string_value(phone_json);
-
-        PGconn *conn = get_pg_connection();
-        if (!conn) {
-            const char *err = "DB connection error";
-            struct MHD_Response *response = MHD_create_response_from_buffer(strlen(err), (void*)err, MHD_RESPMEM_PERSISTENT);
-            MHD_add_response_header(response, "Content-Type", "text/plain");
-            int ret = MHD_queue_response(connection, MHD_HTTP_INTERNAL_SERVER_ERROR, response);
-            MHD_destroy_response(response);
-            json_decref(root);
-            goto cleanup;
-        }
-
-        char query[512];
-        snprintf(query, sizeof(query),
-                 "INSERT INTO contacts (external_id, phone_number) VALUES (%d, '%s') RETURNING id, date_created, date_updated",
-                 external_id, phone_number);
-
-        PGresult *res = PQexec(conn, query);
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            const char *err = "DB error";
-            struct MHD_Response *response = MHD_create_response_from_buffer(strlen(err), (void*)err, MHD_RESPMEM_PERSISTENT);
-            MHD_add_response_header(response, "Content-Type", "text/plain");
-            int ret = MHD_queue_response(connection, MHD_HTTP_INTERNAL_SERVER_ERROR, response);
-            MHD_destroy_response(response);
-            PQclear(res);
-            PQfinish(conn);
-            json_decref(root);
-            goto cleanup;
-        }
-
-        json_t *resp = json_object();
-        json_object_set_new(resp, "id", json_string(PQgetvalue(res, 0, 0)));
-        json_object_set_new(resp, "external_id", json_integer(external_id));
-        json_object_set_new(resp, "phone_number", json_string(phone_number));
-        json_object_set_new(resp, "date_created", json_string(PQgetvalue(res, 0, 1)));
-        json_object_set_new(resp, "date_updated", json_string(PQgetvalue(res, 0, 2)));
-
-        char *resp_str = json_dumps(resp, 0);
-        json_decref(resp);
-        PQclear(res);
-        PQfinish(conn);
-        json_decref(root);
-
-        struct MHD_Response *response = MHD_create_response_from_buffer(strlen(resp_str), resp_str, MHD_RESPMEM_MUST_FREE);
-        MHD_add_response_header(response, "Content-Type", "application/json");
-        int ret = MHD_queue_response(connection, MHD_HTTP_CREATED, response);
-        MHD_destroy_response(response);
-
-    cleanup:
-        free(con_info->post_data);
-        free(con_info);
-        *con_cls = NULL;
-        return MHD_YES;
-    }
+    if (strcmp(method, "POST") == 0 && strcmp(url, "/contacts") == 0)
+        return handle_post_contacts(connection, upload_data, upload_data_size, con_cls);
 
     if (strcmp(method, "GET") == 0 && strcmp(url, "/contacts") == 0)
         return handle_get_contacts(connection, url, method, version, upload_data, upload_data_size, con_cls);
