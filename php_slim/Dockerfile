@@ -1,8 +1,11 @@
 FROM php:8.1-cli-alpine
 
-RUN apk add --no-cache libpng libjpeg freetype zlib zlib-dev && \
+RUN apk add --no-cache --virtual .build-deps \
+    autoconf gcc g++ make musl-dev pkgconf \
+    libpng-dev libjpeg-turbo-dev freetype-dev zlib-dev && \
     docker-php-ext-configure gd --with-freetype --with-jpeg && \
-    docker-php-ext-install gd pdo pdo_pgsql
+    docker-php-ext-install gd pdo pdo_pgsql && \
+    apk del .build-deps
 
 WORKDIR /var/www
 
