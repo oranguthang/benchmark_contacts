@@ -76,11 +76,13 @@ answer_to_connection(void *cls, struct MHD_Connection *connection,
 
         char query[512];
         snprintf(query, sizeof(query),
-                 "INSERT INTO contacts (external_id, phone_number) VALUES (%d, '%s')",
+                 "INSERT INTO contacts (external_id, phone_number) "
+                 "VALUES (%d, '%s') RETURNING id, date_created, date_updated",
                  external_id, phone_number);
 
         PGresult *res = PQexec(conn, query);
-        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+
+        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
             fprintf(stderr, "DB Error: %s\n", PQerrorMessage(conn));
             const char *err = "DB error";
             struct MHD_Response *response = MHD_create_response_from_buffer(strlen(err), (void*)err, MHD_RESPMEM_PERSISTENT);
@@ -91,13 +93,28 @@ answer_to_connection(void *cls, struct MHD_Connection *connection,
             goto cleanup;
         }
 
+        // Формируем JSON-ответ
+        json_t *resp = json_object();
+        json_object_set_new(resp, "id", json_string(PQgetvalue(res, 0, 0)));
+        json_object_set_new(resp, "external_id", json_integer(external_id));
+        json_object_set_new(resp, "phone_number", json_string(phone_number));
+        json_object_set_new(resp, "date_created", json_string(PQgetvalue(res, 0, 1)));
+        json_object_set_new(resp, "date_updated", json_string(PQgetvalue(res, 0, 2)));
+
+        char *resp_str = json_dumps(resp, 0);
+        json_decref(resp);
+
+        struct MHD_Response *response = MHD_create_response_from_buffer(strlen(resp_str), (void*)resp_str, MHD_RESPMEM_MUST_FREE);
+        int ret = MHD_queue_response(connection, MHD_HTTP_CREATED, response);
+        MHD_destroy_response(response);
+
         PQclear(res);
         json_decref(root);
 
-        const char *ok = "{\"status\":\"ok\"}";
-        struct MHD_Response *response = MHD_create_response_from_buffer(strlen(ok), (void*)ok, MHD_RESPMEM_PERSISTENT);
-        int ret = MHD_queue_response(connection, MHD_HTTP_CREATED, response);
-        MHD_destroy_response(response);
+        free(con_info->post_data);
+        free(con_info);
+        *con_cls = NULL;
+        return MHD_YES;
 
     cleanup:
         free(con_info->post_data);
