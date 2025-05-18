@@ -8,6 +8,7 @@ JAVA_SERVICES=db java_spring benchmark_tests_java benchmark_java
 RUST_SERVICES=db rust_axum benchmark_tests_rust benchmark_rust
 GO_SERVICES=db go_fiber benchmark_tests_go benchmark_go
 NODE_SERVICES=db node_express benchmark_tests_node benchmark_node
+C_SERVICES=db c_microhttpd benchmark_tests_c benchmark_c
 
 # Общие команды
 down:
@@ -31,6 +32,9 @@ up-go:
 up-node:
 	docker-compose -f $(COMPOSE_FILE) up -d db node_express
 
+up-c:
+	docker-compose -f $(COMPOSE_FILE) up -d db c_microhttpd
+
 build-python:
 	docker-compose -f $(COMPOSE_FILE) build $(PYTHON_SERVICES)
 
@@ -48,6 +52,9 @@ build-go:
 
 build-node:
 	docker-compose -f $(COMPOSE_FILE) build $(NODE_SERVICES)
+
+build-c:
+	docker-compose -f $(COMPOSE_FILE) build $(C_SERVICES)
 
 # Бенчмарк для Python
 benchmark-python: down build-python up-python
@@ -91,6 +98,13 @@ benchmark-node: down build-node up-node
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_python
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_python
 
+# Бенчмарк для C
+benchmark-c: down build-c up-c
+	@echo "Ожидание запуска сервиса..."
+	sleep 1
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_c
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_c
+
 # Полная остановка всех контейнеров
 stop:
 	docker-compose -f $(COMPOSE_FILE) down -v
@@ -113,6 +127,9 @@ run-go: down build-go up-go
 
 run-node: down build-node up-node
 	@echo "Сервисы Node.js запущены."
+
+run-c: down build-c up-c
+	@echo "Сервисы C запущены."
 
 # Логи для Python сервиса
 logs-python:
@@ -138,4 +155,8 @@ logs-go:
 logs-node:
 	docker-compose -f $(COMPOSE_FILE) logs -f node_express
 
-.PHONY: down up-python up-php up-java up-rust up-go up-node build-python build-php build-java build-rust build-go build-node benchmark-python benchmark-php benchmark-java benchmark-rust benchmark-go benchmark-node stop run-python run-php run-java run-rust run-go run-node logs-python logs-php logs-java logs-rust logs-go logs-node
+# Логи для C сервиса
+logs-c:
+	docker-compose -f $(COMPOSE_FILE) logs -f c_microhttpd
+
+.PHONY: down up-python up-php up-java up-rust up-go up-node up-c build-python build-php build-java build-rust build-go build-node build-c benchmark-python benchmark-php benchmark-java benchmark-rust benchmark-go benchmark-node benchmark-c stop run-python run-php run-java run-rust run-go run-node run-c logs-python logs-php logs-java logs-rust logs-go logs-node logs-c
