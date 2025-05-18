@@ -41,10 +41,9 @@ answer_to_connection(void *cls, struct MHD_Connection *connection,
             }
 
             const char *external_id = json_string_value(json_object_get(root, "external_id"));
-            const char *email = json_string_value(json_object_get(root, "email"));
             const char *phone = json_string_value(json_object_get(root, "phone"));
 
-            if (!external_id || !email || !phone) {
+            if (!external_id || !phone) {
                 json_decref(root);
                 const char *err = "Missing fields";
                 struct MHD_Response *response = MHD_create_response_from_buffer(strlen(err),
@@ -59,8 +58,8 @@ answer_to_connection(void *cls, struct MHD_Connection *connection,
             // Вставляем в БД
             char query[512];
             snprintf(query, sizeof(query),
-                     "INSERT INTO contacts (external_id, email, phone) VALUES ('%s', '%s', '%s')",
-                     external_id, email, phone);
+                     "INSERT INTO contacts (external_id, phone_number) VALUES ('%s', '%s')",
+                     external_id, phone);
 
             PGresult *res = PQexec(conn, query);
             if (PQresultStatus(res) != PGRES_COMMAND_OK) {
