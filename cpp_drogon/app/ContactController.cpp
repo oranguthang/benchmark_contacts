@@ -90,75 +90,55 @@ void ContactController::createContact(const HttpRequestPtr &req,
 void ContactController::getContacts(const HttpRequestPtr& req,
                                     std::function<void(const std::shared_ptr<HttpResponse>&)>&& callback)
 {
-    using namespace drogon;
-    using namespace drogon::orm;
+    auto client = drogon::app().getDbClient();
 
-    std::string query = "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE 1=1";
-    std::vector<std::any> params;
-    int paramIndex = 1;
+    std::string sql = "SELECT id, external_id, name, phone FROM contacts WHERE 1=1";
 
-    if (auto p = req->getOptionalParameter<int>("external_id")) {
-        query += " AND external_id = $" + std::to_string(paramIndex++);
-        params.push_back(*p);
-    }
-    if (auto p = req->getOptionalParameter<std::string>("phone_number")) {
-        query += " AND phone_number = $" + std::to_string(paramIndex++);
-        params.push_back(*p);
-    }
-    if (auto p = req->getOptionalParameter<size_t>("limit")) {
-        query += " LIMIT $" + std::to_string(paramIndex++);
-        params.push_back(static_cast<int>(*p));
-    }
-    if (auto p = req->getOptionalParameter<size_t>("offset")) {
-        query += " OFFSET $" + std::to_string(paramIndex++);
-        params.push_back(static_cast<int>(*p));
+    // Динамическая сборка фильтров
+    if (req->getParameter("external_id") != "") {
+        sql += " AND external_id = '" + client->sqlEscape(req->getParameter("external_id")) + "'";
     }
 
-    auto onSuccess = [callback](const Result& r) {
-        Json::Value result = Json::arrayValue;
-        for (const auto& row : r) {
-            Json::Value contact;
-            contact["id"] = row["id"].as<std::string>();
-            contact["external_id"] = row["external_id"].as<int>();
-            contact["phone_number"] = row["phone_number"].as<std::string>();
-            contact["date_created"] = row["date_created"].as<std::string>();
-            contact["date_updated"] = row["date_updated"].as<std::string>();
-            result.append(contact);
-        }
-        callback(HttpResponse::newHttpJsonResponse(result));
-    };
+    if (req->getParameter("phone") != "") {
+        sql += " AND phone = '" + client->sqlEscape(req->getParameter("phone")) + "'";
+    }
 
-    auto onError = [callback](const DrogonDbException& e) {
-        auto resp = HttpResponse::newHttpResponse();
-        resp->setStatusCode(k500InternalServerError);
-        resp->setContentTypeCode(CT_TEXT_PLAIN);
-        resp->setBody(std::string("DB error: ") + e.base().what());
-        callback(resp);
-    };
+    // Лимит и оффсет по умолчанию
+    int limit = 100;
+    int offset = 0;
 
-    // вызываем execSqlAsync с нужным количеством параметров
-    switch (params.size()) {
-        case 0:
-            dbClient_->execSqlAsync(query, onSuccess, onError);
-            break;
-        case 1:
-            dbClient_->execSqlAsync(query, onSuccess, onError, params[0]);
-            break;
-        case 2:
-            dbClient_->execSqlAsync(query, onSuccess, onError, params[0], params[1]);
-            break;
-        case 3:
-            dbClient_->execSqlAsync(query, onSuccess, onError, params[0], params[1], params[2]);
-            break;
-        case 4:
-            dbClient_->execSqlAsync(query, onSuccess, onError, params[0], params[1], params[2], params[3]);
-            break;
-        default: {
-            auto resp = HttpResponse::newHttpResponse();
-            resp->setStatusCode(k400BadRequest);
-            resp->setBody("Unsupported number of parameters");
+    if (req->getParameter("limit") != "") {
+        limit = std::stoi(req->getParameter("limit"));
+    }
+
+    if (req->getParameter("offset") != "") {
+        offset = std::stoi(req->getParameter("offset"));
+    }
+
+    sql += " ORDER BY id";
+    sql += " LIMIT " + std::to_string(limit);
+    sql += " OFFSET " + std::to_string(offset);
+
+    // Выполнение запроса
+    client->execSqlAsync(
+        sql,
+        [callback](const drogon::orm::Result &result) {
+            // Формируем JSON-ответ
+            Json::Value response(Json::arrayValue);
+            for (const auto &row : result) {
+                Json::Value contact;
+                contact["id"] = row["id"].as<int>();
+                contact["external_id"] = row["external_id"].as<std::string>();
+                contact["name"] = row["name"].as<std::string>();
+                contact["phone"] = row["phone"].as<std::string>();
+                response.append(contact);
+            }
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
             callback(resp);
-            break;
+        },
+        [](const drogon::orm::DrogonDbException &e) {
+            LOG_ERROR << "Database error: " << e.base().what();
         }
-    }
+    );
 }
