@@ -3,12 +3,11 @@ project(drogon_contacts_service)
 
 set(CMAKE_CXX_STANDARD 17)
 
-find_package(Drogon REQUIRED COMPONENTS jsoncpp orm_postgresql fmt)
+find_package(Drogon REQUIRED)
+find_package(fmt REQUIRED)
 
-add_executable(server
-    app/main.cpp
-    app/ContactController.cpp
-)
+file(GLOB_RECURSE SOURCES "app/*.cpp")
 
-target_include_directories(server PRIVATE app)
-target_link_libraries(server PRIVATE Drogon::Drogon)
+add_executable(server ${SOURCES})
+
+target_link_libraries(server PRIVATE Drogon::Drogon fmt::fmt)
