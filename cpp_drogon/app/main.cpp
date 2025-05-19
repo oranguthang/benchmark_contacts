@@ -12,13 +12,14 @@ int main() {
             LOG_ERROR << "Failed to create database client";
             return 1;
         }
+
+        // Создаем контроллер
+        auto controller = std::make_shared<ContactController>(dbClient);
+
     } catch (const std::exception &e) {
         LOG_ERROR << "Database connection failed: " << e.what();
         return 1;
     }
-
-    // Регистрируем роуты
-    ContactController::initRoutes();
 
     // Добавляем слушатель
     drogon::app()

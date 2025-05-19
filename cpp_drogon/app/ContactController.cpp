@@ -35,7 +35,7 @@ void ContactController::createContact(const HttpRequestPtr &req,
     std::string phone_number = (*json)["phone_number"].asString();
 
     dbClient_->execSqlAsync(
-        "INSERT INTO contacts (external_id, phone_number) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING id, date_created, date_updated",
+        "INSERT INTO contacts (external_id, phone_number) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING id, external_id, phone_number, date_created, date_updated",
         [callback](const Result &r) {
             if (r.empty()) {
                 auto resp = HttpResponse::newHttpResponse();
@@ -72,32 +72,29 @@ void ContactController::createContact(const HttpRequestPtr &req,
 void ContactController::getContacts(const HttpRequestPtr &req,
                                     std::function<void (const HttpResponsePtr &)> &&callback) {
     std::string query = "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE 1=1";
-    std::vector<std::string> whereParams;
-    std::vector<std::string> limitOffsetParams;
 
-    if (auto external_id = req->getParameter("external_id"); !external_id.empty()) {
-        query += " AND external_id = $" + std::to_string(whereParams.size() + 1);
-        whereParams.push_back(external_id);
+    auto external_id = req->getOptionalParameter<int>("external_id");
+    auto phone_number = req->getOptionalParameter<std::string>("phone_number");
+    auto limit = req->getOptionalParameter<size_t>("limit");
+    auto offset = req->getOptionalParameter<size_t>("offset");
+
+    std::vector<const char*> params;
+    if (external_id) {
+        query += " AND external_id = $1";
+        params.push_back(std::to_string(*external_id).c_str());
     }
-
-    if (auto phone = req->getParameter("phone_number"); !phone.empty()) {
-        query += " AND phone_number = $" + std::to_string(whereParams.size() + 1);
-        whereParams.push_back(phone);
+    if (phone_number) {
+        query += " AND phone_number = $2";
+        params.push_back(phone_number->c_str());
     }
-
-    if (auto limit = req->getParameter("limit"); !limit.empty()) {
-        query += " LIMIT $" + std::to_string(whereParams.size() + 1);
-        limitOffsetParams.push_back(limit);
+    if (limit) {
+        query += " LIMIT $3";
+        params.push_back(std::to_string(*limit).c_str());
     }
-
-    if (auto offset = req->getParameter("offset"); !offset.empty()) {
-        query += " OFFSET $" + std::to_string(whereParams.size() + limitOffsetParams.size() + 1);
-        limitOffsetParams.push_back(offset);
+    if (offset) {
+        query += " OFFSET $4";
+        params.push_back(std::to_string(*offset).c_str());
     }
-
-    std::vector<std::string> allParams;
-    allParams.insert(allParams.end(), whereParams.begin(), whereParams.end());
-    allParams.insert(allParams.end(), limitOffsetParams.begin(), limitOffsetParams.end());
 
     dbClient_->execSqlAsync(
         query,
@@ -122,37 +119,6 @@ void ContactController::getContacts(const HttpRequestPtr &req,
             resp->setContentTypeCode(CT_TEXT_PLAIN);
             resp->setBody(std::string("DB error: ") + e.base().what());
             callback(resp);
-        },
-        allParams
-    );
-}
-
-void ContactController::initRoutes() {
-    auto dbClient = drogon::app().getDbClient();
-    if (!dbClient) {
-        LOG_ERROR << "Database client is not initialized!";
-        return;
-    }
-
-    auto controller = std::make_shared<ContactController>(dbClient);
-
-    drogon::app().registerHandler("/ping", [controller](const HttpRequestPtr &req,
-                                                        std::function<void (const HttpResponsePtr &)> callback) {
-        controller->ping(req, std::move(callback));
-    },
-    {Get});
-
-    drogon::app().registerHandler("/contacts", [controller](const HttpRequestPtr &req,
-                                                            std::function<void (const HttpResponsePtr &)> callback) {
-        if (req->method() == Post) {
-            controller->createContact(req, std::move(callback));
-        } else if (req->method() == Get) {
-            controller->getContacts(req, std::move(callback));
-        } else {
-            auto resp = HttpResponse::newHttpResponse();
-            resp->setStatusCode(k405MethodNotAllowed);
-            callback(resp);
         }
-    },
-    {Get, Post});
+    );
 }

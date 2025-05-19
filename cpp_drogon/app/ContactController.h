@@ -5,6 +5,12 @@
 
 class ContactController : public drogon::HttpController<ContactController> {
 public:
+    METHOD_LIST_BEGIN
+        METHOD_ADD(ContactController::ping, "/ping", drogon::Get);
+        METHOD_ADD(ContactController::createContact, "/contacts", drogon::Post);
+        METHOD_ADD(ContactController::getContacts, "/contacts", drogon::Get);
+    METHOD_LIST_END
+
     explicit ContactController(const drogon::orm::DbClientPtr &db);
 
     void ping(const drogon::HttpRequestPtr &req,
@@ -16,7 +22,6 @@ public:
     void getContacts(const drogon::HttpRequestPtr &req,
                      std::function<void (const drogon::HttpResponsePtr &)> &&callback);
 
-    static void initRoutes();
 private:
     drogon::orm::DbClientPtr dbClient_;
 };
