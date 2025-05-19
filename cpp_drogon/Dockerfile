@@ -1,19 +1,18 @@
 FROM drogonframework/drogon:latest
 
-# Устанавливаем зависимости для сборки
 RUN apt-get update && \
-    apt-get install -y libjsoncpp-dev && \
+    apt-get install -y libpq-dev libjsoncpp-dev && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
-COPY . /build
+COPY . .
 
-RUN mkdir -p /build/build && \
-    cd /build/build && \
+RUN mkdir -p build && \
+    cd build && \
     cmake .. && \
     make -j$(nproc)
 
-# Переменные окружения для конфигурации
+# Переменные окружения
 ENV DB_HOST=db \
     DB_PORT=5432 \
     DB_NAME=contacts_db \
@@ -21,4 +20,4 @@ ENV DB_HOST=db \
     DB_PASSWORD=password \
     APP_PORT=8080
 
-CMD ["/build/build/server"]
+CMD ["./build/server"]
