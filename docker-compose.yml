@@ -192,25 +192,25 @@ services:
     environment:
       BASE_URL: http://c_microhttpd:8080
 
-  cpp_crow:
+  cpp_drogon:
     <<: *common_service
-    build: ./cpp_crow
+    build: cpp_drogon
 
   benchmark_tests_cpp:
     <<: *common_benchmark_tests
     depends_on:
-      cpp_crow:
+      cpp_drogon:
         condition: service_healthy
     environment:
-      BASE_URL: http://cpp_crow:8080
+      BASE_URL: http://cpp_drogon:8080
 
   benchmark_cpp:
     <<: *common_benchmark
     depends_on:
-      cpp_crow:
+      cpp_drogon:
         condition: service_healthy
     environment:
-      BASE_URL: http://cpp_crow:8080
+      BASE_URL: http://cpp_drogon:8080
 
 networks:
   backend:
