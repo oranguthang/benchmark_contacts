@@ -1,15 +1,22 @@
 #pragma once
-#include <drogon/HttpController.h>
 
-using namespace drogon;
+#include <drogon/HttpController.h>
+#include <drogon/orm/DbClient.h>
 
 class ContactController : public drogon::HttpController<ContactController> {
 public:
-    METHOD_LIST_BEGIN
-        ADD_METHOD_TO(ContactController::createContact, "/contacts", Post);
-        ADD_METHOD_TO(ContactController::getContacts, "/contacts", Get);
-    METHOD_LIST_END
+    explicit ContactController(const drogon::orm::DbClientPtr &db);
 
-    void createContact(const HttpRequestPtr &req, std::function<void (const HttpResponsePtr &)> &&callback);
-    void getContacts(const HttpRequestPtr &req, std::function<void (const HttpResponsePtr &)> &&callback);
+    void ping(const drogon::HttpRequestPtr &req,
+              std::function<void (const drogon::HttpResponsePtr &)> &&callback);
+
+    void createContact(const drogon::HttpRequestPtr &req,
+                       std::function<void (const drogon::HttpResponsePtr &)> &&callback);
+
+    void getContacts(const drogon::HttpRequestPtr &req,
+                     std::function<void (const drogon::HttpResponsePtr &)> &&callback);
+
+    static void initRoutes();
+private:
+    drogon::orm::DbClientPtr dbClient_;
 };
