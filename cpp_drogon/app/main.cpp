@@ -7,29 +7,27 @@ int main() {
 
     // Подключение к PostgreSQL
     try {
-        // Создаем клиента базы данных с явными параметрами
-        auto dbClient = drogon::app().createDbClient(
-            "postgresql",  // Тип базы данных
-            "db",          // Хост
-            5432,          // Порт
-            "contacts_db", // Имя базы данных
-            "user",        // Имя пользователя
-            "password",    // Пароль
-            1,            // Количество соединений
-            "",           // Файл с сертификатом (не используется)
-            "default",     // Имя клиента (для управления несколькими подключениями)
-            false,         // auto_auto
-            "",            // characterSet (не используется)
-            5.0,           // Таймаут соединения
-            false          // auto_reconnect
-        );
+        // Создаем конфигурацию базы данных
+        drogon::orm::DbConfig dbConfig;
+        dbConfig.host = "db";
+        dbConfig.port = 5432;
+        dbConfig.dbname = "contacts_db";
+        dbConfig.user = "user";
+        dbConfig.password = "password";
+        dbConfig.connectionNumber = 1;
+        dbConfig.clientName = "default";
 
+        // Добавляем клиент базы данных
+        drogon::app().addDbClient(dbConfig);
+
+        // Получаем клиент базы данных
+        auto dbClient = drogon::app().getDbClient("default");
         if (!dbClient) {
-            LOG_ERROR << "Failed to create database client";
+            LOG_ERROR << "Failed to get database client";
             return 1;
         }
 
-        // Создаем контроллер и передаем ему клиент базы данных
+        // Создаем контроллер
         auto controller = std::make_shared<ContactController>(dbClient);
 
     } catch (const std::exception &e) {
