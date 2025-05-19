@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     cmake \
     libpqxx-dev \
     nlohmann-json3-dev \
+    libasio-dev \
     pkg-config \
     git \
     && rm -rf /var/lib/apt/lists/*
