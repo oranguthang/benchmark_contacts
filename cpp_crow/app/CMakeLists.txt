@@ -15,11 +15,17 @@ add_definitions(-DCROW_MAIN)
 # Подключаем внешние зависимости через FetchContent
 include(FetchContent)
 
+# Отключаем Boost внутри Crow
+set(CROW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(CROW_ENABLE_SSL OFF CACHE BOOL "" FORCE)
+set(CROW_ENABLE_COMPRESSION OFF CACHE BOOL "" FORCE)
+set(CROW_USE_BOOST OFF CACHE BOOL "" FORCE)
+
 # Crow
 FetchContent_Declare(
   crow
   GIT_REPOSITORY https://github.com/CrowCpp/Crow.git
-  GIT_TAG v1.0+2  # можно актуальный релиз или master
+  GIT_TAG v1.0+2
 )
 FetchContent_MakeAvailable(crow)
 
