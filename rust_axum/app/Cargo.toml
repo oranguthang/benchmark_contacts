@@ -5,7 +5,7 @@ edition = "2021"
 
 [profile.release]
 codegen-units = 1
-lto = "thin"
+lto = true
 panic = "abort"
 opt-level = 3
 incremental = false
