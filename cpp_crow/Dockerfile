@@ -1,27 +1,28 @@
 FROM gcc:14-bookworm AS build
 
-WORKDIR /app
+WORKDIR /build
 
-# Установим зависимости
+# Установим зависимости для сборки
 RUN apt-get update && \
     apt-get install -y cmake libpqxx-dev libssl-dev nlohmann-json3-dev
 
-COPY . .
+# Копируем исходники в контейнер
+COPY app /build/app
 
 # Собираем проект
-RUN cmake -Bbuild -H. && cmake --build build --target server
+RUN cmake -Bbuild -H/build/app && cmake --build build --target server
 
 FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Устанавливаем libpq
+# Устанавливаем runtime зависимости
 RUN apt-get update && \
     apt-get install -y libpq5 && \
     rm -rf /var/lib/apt/lists/*
 
-# Копируем бинарник из стадии сборки
-COPY --from=build /app/build/server /app/server
+# Копируем готовый бинарник
+COPY --from=build /build/build/server /app/server
 
 EXPOSE 8080
 

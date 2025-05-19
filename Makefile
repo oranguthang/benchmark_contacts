@@ -9,6 +9,7 @@ RUST_SERVICES=db rust_axum benchmark_tests_rust benchmark_rust
 GO_SERVICES=db go_fiber benchmark_tests_go benchmark_go
 NODE_SERVICES=db node_express benchmark_tests_node benchmark_node
 C_SERVICES=db c_microhttpd benchmark_tests_c benchmark_c
+CPP_SERVICES=db cpp_crow benchmark_tests_cpp benchmark_cpp
 
 # Общие команды
 down:
@@ -35,6 +36,9 @@ up-node:
 up-c:
 	docker-compose -f $(COMPOSE_FILE) up -d db c_microhttpd
 
+up-cpp:
+	docker-compose -f $(COMPOSE_FILE) up -d db cpp_crow
+
 build-python:
 	docker-compose -f $(COMPOSE_FILE) build $(PYTHON_SERVICES)
 
@@ -55,6 +59,9 @@ build-node:
 
 build-c:
 	docker-compose -f $(COMPOSE_FILE) build $(C_SERVICES)
+
+build-cpp:
+	docker-compose -f $(COMPOSE_FILE) build $(CPP_SERVICES)
 
 # Бенчмарк для Python
 benchmark-python: down build-python up-python
@@ -105,6 +112,13 @@ benchmark-c: down build-c up-c
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_c
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_c
 
+# Бенчмарк для CPP
+benchmark-cpp: down build-cpp up-cpp
+	@echo "Ожидание запуска сервиса..."
+	sleep 1
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_cpp
+	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_cpp
+
 # Полная остановка всех контейнеров
 stop:
 	docker-compose -f $(COMPOSE_FILE) down -v
@@ -130,6 +144,9 @@ run-node: down build-node up-node
 
 run-c: down build-c up-c
 	@echo "Сервисы C запущены."
+
+run-cpp: down build-cpp up-cpp
+	@echo "Сервисы C++ запущены."
 
 # Логи для Python сервиса
 logs-python:
@@ -159,4 +176,8 @@ logs-node:
 logs-c:
 	docker-compose -f $(COMPOSE_FILE) logs -f c_microhttpd
 
-.PHONY: down up-python up-php up-java up-rust up-go up-node up-c build-python build-php build-java build-rust build-go build-node build-c benchmark-python benchmark-php benchmark-java benchmark-rust benchmark-go benchmark-node benchmark-c stop run-python run-php run-java run-rust run-go run-node run-c logs-python logs-php logs-java logs-rust logs-go logs-node logs-c
+# Логи для C++ сервиса
+logs-cpp:
+	docker-compose -f $(COMPOSE_FILE) logs -f cpp_crow
+
+.PHONY: down up-python up-php up-java up-rust up-go up-node up-c up-cpp build-python build-php build-java build-rust build-go build-node build-c build-cpp benchmark-python benchmark-php benchmark-java benchmark-rust benchmark-go benchmark-node benchmark-c benchmark-cpp stop run-python run-php run-java run-rust run-go run-node run-c run-cpp logs-python logs-php logs-java logs-rust logs-go logs-node logs-c logs-cpp

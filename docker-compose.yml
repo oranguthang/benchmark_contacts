@@ -192,6 +192,26 @@ services:
     environment:
       BASE_URL: http://c_microhttpd:8080
 
+  cpp_crow:
+    <<: *common_service
+    build: ./cpp_crow
+
+  benchmark_tests_cpp:
+    <<: *common_benchmark_tests
+    depends_on:
+      cpp_crow:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://cpp_crow:8080
+
+  benchmark_cpp:
+    <<: *common_benchmark
+    depends_on:
+      cpp_crow:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://cpp_crow:8080
+
 networks:
   backend:
     driver: bridge
