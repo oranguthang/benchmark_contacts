@@ -90,7 +90,7 @@ void ContactController::createContact(const HttpRequestPtr &req,
 void ContactController::getContacts(const HttpRequestPtr& req,
                                     std::function<void(const HttpResponsePtr&)>&& callback)
 {
-    // Простой эскейп: заменяем одинарную кавычку на две
+    // Простая «SQL-инъекцийная» защита для строк
     auto escape = [](const std::string &s) {
         std::string r;
         r.reserve(s.size());
@@ -101,7 +101,8 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         return r;
     };
 
-    auto client = drogon::app().getDbClient();
+    // Берём клиент из поля контроллера, а не из app()
+    auto client = dbClient_;
     if (!client) {
         auto resp = HttpResponse::newHttpResponse();
         resp->setStatusCode(k500InternalServerError);
@@ -110,13 +111,13 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         return;
     }
 
+    // Собираем строку
     std::string sql =
         "SELECT id, external_id, phone_number, date_created, date_updated "
         "FROM contacts WHERE 1=1";
 
     if (auto ext = req->getParameter("external_id"); !ext.empty()) {
-        // Преобразуем external_id из строки в число БЕЗ кавычек
-        sql += " AND external_id = " + ext;
+        sql += " AND external_id = '" + escape(ext) + "'";
     }
     if (auto ph = req->getParameter("phone_number"); !ph.empty()) {
         sql += " AND phone_number = '" + escape(ph) + "'";
@@ -140,26 +141,19 @@ void ContactController::getContacts(const HttpRequestPtr& req,
            " LIMIT " + std::to_string(limit) +
            " OFFSET " + std::to_string(offset);
 
+    // Коллбэки
     auto onSuccess = [callback](const drogon::orm::Result &rows) {
         Json::Value arr(Json::arrayValue);
-        try {
-            for (auto &r : rows) {
-                Json::Value c;
-                c["id"] = r["id"].as<std::string>(); // UUID преобразуется в строку
-                c["external_id"] = r["external_id"].as<int>(); // Правильно, т.к. это INT
-                c["phone_number"] = r["phone_number"].as<std::string>();
-                c["date_created"] = r["date_created"].as<std::string>();
-                c["date_updated"] = r["date_updated"].as<std::string>();
-                arr.append(c);
-            }
-            callback(HttpResponse::newHttpJsonResponse(arr));
-        } catch (const std::exception &e) {
-            LOG_ERROR << "Error processing database result: " << e.what();
-            auto resp = HttpResponse::newHttpResponse();
-            resp->setStatusCode(k500InternalServerError);
-            resp->setBody("Error processing database result");
-            callback(resp);
+        for (auto &r : rows) {
+            Json::Value c;
+            c["id"]            = r["id"].as<std::string>();
+            c["external_id"]   = r["external_id"].as<int>();
+            c["phone_number"]  = r["phone_number"].as<std::string>();
+            c["date_created"]  = r["date_created"].as<std::string>();
+            c["date_updated"]  = r["date_updated"].as<std::string>();
+            arr.append(c);
         }
+        callback(HttpResponse::newHttpJsonResponse(arr));
     };
     auto onError = [callback](const drogon::orm::DrogonDbException &e) {
         LOG_ERROR << "DB error: " << e.base().what();
@@ -169,5 +163,6 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         callback(resp);
     };
 
+    // Выполняем
     client->execSqlAsync(sql, onSuccess, onError);
 }
