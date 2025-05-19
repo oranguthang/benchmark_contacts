@@ -1,4 +1,5 @@
 #include "ContactController.h"
+#include <drogon/drogon.h>
 #include <drogon/utils/Utilities.h>
 #include <json/json.h>
 
@@ -8,6 +9,23 @@ using namespace drogon::orm;
 ContactController::ContactController(const DbClientPtr &db)
     : dbClient_(db)
 {}
+
+void ContactController::registerRoutes() {
+    app().registerHandler("/ping",
+        [this](const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback) {
+            this->ping(req, std::move(callback));
+        },
+        {Get});
+
+    app().registerHandler("/contacts",
+        [this](const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback) {
+            if (req->getMethod() == Post)
+                this->createContact(req, std::move(callback));
+            else
+                this->getContacts(req, std::move(callback));
+        },
+        {Get, Post});
+}
 
 void ContactController::ping(const HttpRequestPtr &req,
                              std::function<void (const HttpResponsePtr &)> &&callback) {
