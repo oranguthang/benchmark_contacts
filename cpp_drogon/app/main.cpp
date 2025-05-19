@@ -15,18 +15,18 @@ int main() {
 
     // Подключение к PostgreSQL
     try {
-        // Создаем конфигурацию базы данных
-        drogon::orm::DbConfig dbConfig;
-        dbConfig.host = dbHost ? dbHost : "db";
-        dbConfig.port = dbPort ? std::stoi(dbPort) : 5432;
-        dbConfig.dbname = dbName ? dbName : "contacts_db";
-        dbConfig.user = dbUser ? dbUser : "user";
-        dbConfig.password = dbPass ? dbPass : "password";
-        dbConfig.connectionNumber = 1;
-        dbConfig.clientName = "default";
+        // Создаем конфигурацию базы данных для PostgreSQL
+        drogon::orm::PostgresConfig pgConfig;
+        pgConfig.host = dbHost ? dbHost : "db";
+        pgConfig.port = dbPort ? std::stoi(dbPort) : 5432;
+        pgConfig.dbname = dbName ? dbName : "contacts_db";
+        pgConfig.user = dbUser ? dbUser : "user";
+        pgConfig.password = dbPass ? dbPass : "password";
+        pgConfig.connectionNumber = 1;
+        pgConfig.clientName = "default";
 
         // Добавляем клиент базы данных
-        drogon::app().addDbClient(dbConfig);
+        drogon::app().addDbClient(pgConfig);
 
         // Получаем клиент базы данных
         auto dbClient = drogon::app().getDbClient("default");
