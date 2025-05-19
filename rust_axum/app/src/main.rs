@@ -55,8 +55,8 @@ fn main() -> anyhow::Result<()> {
         .unwrap_or_else(num_cpus::get);
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(worker_threads)
-        .max_blocking_threads(worker_threads * 2)
+        .worker_threads(worker_threads + 1)
+        .max_blocking_threads((worker_threads + 1) * 2)
         .enable_all()
         .build()?;
 
