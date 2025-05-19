@@ -17,7 +17,7 @@ include(FetchContent)
 FetchContent_Declare(
   crow
   GIT_REPOSITORY https://github.com/CrowCpp/Crow.git
-  GIT_TAG master
+  GIT_TAG v1.0+2
 )
 # Отключаем всё лишнее перед MakeAvailable
 set(CROW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -42,9 +42,10 @@ add_executable(server
 )
 
 target_link_libraries(server
+    PRIVATE
     ${PQXX_LIBRARIES}
     nlohmann_json::nlohmann_json
-    crow
+    crow::crow
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
