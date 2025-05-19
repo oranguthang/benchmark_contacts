@@ -4,6 +4,7 @@ project(drogon_contacts_service)
 set(CMAKE_CXX_STANDARD 17)
 
 find_package(Drogon REQUIRED)
+find_package(Jsoncpp REQUIRED)
 
 add_executable(server
     app/main.cpp
@@ -11,4 +12,4 @@ add_executable(server
 )
 
 target_include_directories(server PRIVATE app)
-target_link_libraries(server PRIVATE Drogon::Drogon)
+target_link_libraries(server PRIVATE Drogon::Drogon Jsoncpp::Jsoncpp)
