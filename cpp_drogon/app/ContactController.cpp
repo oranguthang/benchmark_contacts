@@ -90,6 +90,7 @@ void ContactController::createContact(const HttpRequestPtr &req,
 void ContactController::getContacts(const HttpRequestPtr& req,
                                     std::function<void(const HttpResponsePtr&)>&& callback)
 {
+    // Получаем клиента
     auto client = drogon::app().getDbClient();
     if (!client) {
         auto resp = HttpResponse::newHttpResponse();
@@ -99,52 +100,64 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         return;
     }
 
-    std::string sql = "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE 1=1";
+    // Базовый запрос
+    std::string sql =
+        "SELECT id, external_id, phone_number, date_created, date_updated "
+        "FROM contacts WHERE 1=1";
 
-    // Вектор параметров
-    std::vector<std::string> params;
-
-    if (!req->getParameter("external_id").empty()) {
-        sql += " AND external_id = $" + std::to_string(params.size() + 1);
-        params.push_back(req->getParameter("external_id"));
+    // Добавляем фильтры по внешнему ID и номеру
+    if (auto ext = req->getParameter("external_id"); !ext.empty()) {
+        sql += " AND external_id = '" + client->sqlEscape(ext) + "'";
+    }
+    if (auto ph = req->getParameter("phone_number"); !ph.empty()) {
+        sql += " AND phone_number = '" + client->sqlEscape(ph) + "'";
     }
 
-    if (!req->getParameter("phone_number").empty()) {
-        sql += " AND phone_number = $" + std::to_string(params.size() + 1);
-        params.push_back(req->getParameter("phone_number"));
-    }
-
-    if (!req->getParameter("limit").empty()) {
-        sql += " LIMIT $" + std::to_string(params.size() + 1);
-        params.push_back(req->getParameter("limit"));
-    }
-
-    if (!req->getParameter("offset").empty()) {
-        sql += " OFFSET $" + std::to_string(params.size() + 1);
-        params.push_back(req->getParameter("offset"));
-    }
-
-    // Коллбэки
-    auto successCallback = [callback](const drogon::orm::Result &result) {
-        Json::Value response(Json::arrayValue);
-        for (const auto &row : result) {
-            Json::Value contact;
-            contact["id"] = row["id"].as<int>();
-            contact["external_id"] = row["external_id"].as<std::string>();
-            contact["phone_number"] = row["phone_number"].as<std::string>();
-            contact["date_created"] = row["date_created"].as<std::string>();
-            contact["date_updated"] = row["date_updated"].as<std::string>();
-            response.append(contact);
-        }
-        auto resp = HttpResponse::newHttpJsonResponse(response);
+    // Парсим limit/offset (или ставим дефолт)
+    int limit = 10000;
+    int offset = 0;
+    try {
+        if (auto l = req->getParameter("limit"); !l.empty())
+            limit = std::stoi(l);
+        if (auto o = req->getParameter("offset"); !o.empty())
+            offset = std::stoi(o);
+    } catch (...) {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setBody("Invalid limit or offset");
         callback(resp);
+        return;
+    }
+
+    // Добавляем сортировку, лимит и оффсет
+    sql += " ORDER BY id"
+           " LIMIT " + std::to_string(limit) +
+           " OFFSET " + std::to_string(offset);
+
+    // Колбэк на успех
+    auto onSuccess = [callback](const drogon::orm::Result &rows) {
+        Json::Value arr(Json::arrayValue);
+        for (auto &r : rows) {
+            Json::Value c;
+            c["id"]           = r["id"].as<std::string>();
+            c["external_id"]  = r["external_id"].as<int>();
+            c["phone_number"] = r["phone_number"].as<std::string>();
+            c["date_created"] = r["date_created"].as<std::string>();
+            c["date_updated"] = r["date_updated"].as<std::string>();
+            arr.append(c);
+        }
+        callback(HttpResponse::newHttpJsonResponse(arr));
     };
 
-    auto errorCallback = [callback](const drogon::orm::DrogonDbException &e) {
-        LOG_ERROR << "Database error: " << e.base().what();
+    // Колбэк на ошибку
+    auto onError = [callback](const drogon::orm::DrogonDbException &e) {
+        LOG_ERROR << "DB error: " << e.base().what();
         auto resp = HttpResponse::newHttpResponse();
         resp->setStatusCode(k500InternalServerError);
         resp->setBody("Database error occurred");
         callback(resp);
     };
+
+    // И наконец — выполняем
+    client->execSqlAsync(sql, onSuccess, onError);
 }
