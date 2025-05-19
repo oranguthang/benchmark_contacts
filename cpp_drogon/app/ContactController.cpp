@@ -88,7 +88,7 @@ void ContactController::createContact(const HttpRequestPtr &req,
 }
 
 void ContactController::getContacts(const HttpRequestPtr& req,
-                                  std::function<void(const HttpResponsePtr&)>&& callback)
+                                    std::function<void(const HttpResponsePtr&)>&& callback)
 {
     auto client = drogon::app().getDbClient();
     if (!client) {
@@ -99,97 +99,52 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         return;
     }
 
-    // Базовый запрос
-    std::string sql = "SELECT id, external_id, name, phone FROM contacts WHERE 1=1";
+    std::string sql = "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE 1=1";
 
-    // Параметры для фильтрации
-    std::string external_id_filter;
-    std::string phone_filter;
-    std::string external_id;
-    std::string phone;
+    // Вектор параметров
+    std::vector<std::string> params;
 
-    // Добавляем фильтры
-    if (!(external_id = req->getParameter("external_id")).empty()) {
-        external_id_filter = " AND external_id = $1";
-        sql += external_id_filter;
+    if (!req->getParameter("external_id").empty()) {
+        sql += " AND external_id = $" + std::to_string(params.size() + 1);
+        params.push_back(req->getParameter("external_id"));
     }
 
-    if (!(phone = req->getParameter("phone")).empty()) {
-        phone_filter = external_id_filter.empty() ? " AND phone = $1" : " AND phone = $2";
-        sql += phone_filter;
+    if (!req->getParameter("phone_number").empty()) {
+        sql += " AND phone_number = $" + std::to_string(params.size() + 1);
+        params.push_back(req->getParameter("phone_number"));
     }
 
-    // Лимит и оффсет
-    int limit = 100;
-    int offset = 0;
+    if (!req->getParameter("limit").empty()) {
+        sql += " LIMIT $" + std::to_string(params.size() + 1);
+        params.push_back(req->getParameter("limit"));
+    }
 
-    try {
-        if (auto limit_param = req->getParameter("limit"); !limit_param.empty()) {
-            limit = std::stoi(limit_param);
+    if (!req->getParameter("offset").empty()) {
+        sql += " OFFSET $" + std::to_string(params.size() + 1);
+        params.push_back(req->getParameter("offset"));
+    }
+
+    // Коллбэки
+    auto successCallback = [callback](const drogon::orm::Result &result) {
+        Json::Value response(Json::arrayValue);
+        for (const auto &row : result) {
+            Json::Value contact;
+            contact["id"] = row["id"].as<int>();
+            contact["external_id"] = row["external_id"].as<std::string>();
+            contact["phone_number"] = row["phone_number"].as<std::string>();
+            contact["date_created"] = row["date_created"].as<std::string>();
+            contact["date_updated"] = row["date_updated"].as<std::string>();
+            response.append(contact);
         }
-        if (auto offset_param = req->getParameter("offset"); !offset_param.empty()) {
-            offset = std::stoi(offset_param);
-        }
-    } catch (const std::exception& e) {
-        auto resp = HttpResponse::newHttpResponse();
-        resp->setStatusCode(k400BadRequest);
-        resp->setBody("Invalid limit or offset value");
+        auto resp = HttpResponse::newHttpJsonResponse(response);
         callback(resp);
-        return;
-    }
+    };
 
-    sql += " ORDER BY id LIMIT " + std::to_string(limit) +
-           " OFFSET " + std::to_string(offset);
-
-    // Выполняем запрос с правильной передачей параметров
-    if (!external_id.empty() && !phone.empty()) {
-        client->execSqlAsync(
-            sql,
-            [callback](const drogon::orm::Result &result) {
-                Json::Value response(Json::arrayValue);
-                for (const auto &row : result) {
-                    Json::Value contact;
-                    contact["id"] = row["id"].as<int>();
-                    contact["external_id"] = row["external_id"].as<std::string>();
-                    contact["name"] = row["name"].as<std::string>();
-                    contact["phone"] = row["phone"].as<std::string>();
-                    response.append(contact);
-                }
-                auto resp = HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-            },
-            [callback](const drogon::orm::DrogonDbException &e) {
-                LOG_ERROR << "Database error: " << e.base().what();
-                auto resp = HttpResponse::newHttpResponse();
-                resp->setStatusCode(k500InternalServerError);
-                resp->setBody("Database error occurred");
-                callback(resp);
-            },
-            external_id,
-            phone
-        );
-    }
-    else if (!external_id.empty()) {
-        client->execSqlAsync(
-            sql,
-            [callback](const drogon::orm::Result &result) { /* same as above */ },
-            [callback](const drogon::orm::DrogonDbException &e) { /* same as above */ },
-            external_id
-        );
-    }
-    else if (!phone.empty()) {
-        client->execSqlAsync(
-            sql,
-            [callback](const drogon::orm::Result &result) { /* same as above */ },
-            [callback](const drogon::orm::DrogonDbException &e) { /* same as above */ },
-            phone
-        );
-    }
-    else {
-        client->execSqlAsync(
-            sql,
-            [callback](const drogon::orm::Result &result) { /* same as above */ },
-            [callback](const drogon::orm::DrogonDbException &e) { /* same as above */ }
-        );
-    }
+    auto errorCallback = [callback](const drogon::orm::DrogonDbException &e) {
+        LOG_ERROR << "Database error: " << e.base().what();
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k500InternalServerError);
+        resp->setBody("Database error occurred");
+        callback(resp);
+    };
 }
