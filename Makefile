@@ -9,7 +9,7 @@ RUST_SERVICES=db rust_axum benchmark_tests_rust benchmark_rust
 GO_SERVICES=db go_fiber benchmark_tests_go benchmark_go
 NODE_SERVICES=db node_express benchmark_tests_node benchmark_node
 C_SERVICES=db c_microhttpd benchmark_tests_c benchmark_c
-CPP_SERVICES=db cpp_crow benchmark_tests_cpp benchmark_cpp
+CPP_SERVICES=db cpp_drogon benchmark_tests_cpp benchmark_cpp
 
 # Общие команды
 down:
@@ -37,7 +37,7 @@ up-c:
 	docker-compose -f $(COMPOSE_FILE) up -d db c_microhttpd
 
 up-cpp:
-	docker-compose -f $(COMPOSE_FILE) up -d db cpp_crow
+	docker-compose -f $(COMPOSE_FILE) up -d db cpp_drogon
 
 build-python:
 	docker-compose -f $(COMPOSE_FILE) build $(PYTHON_SERVICES)
@@ -178,6 +178,6 @@ logs-c:
 
 # Логи для C++ сервиса
 logs-cpp:
-	docker-compose -f $(COMPOSE_FILE) logs -f cpp_crow
+	docker-compose -f $(COMPOSE_FILE) logs -f cpp_drogon
 
 .PHONY: down up-python up-php up-java up-rust up-go up-node up-c up-cpp build-python build-php build-java build-rust build-go build-node build-c build-cpp benchmark-python benchmark-php benchmark-java benchmark-rust benchmark-go benchmark-node benchmark-c benchmark-cpp stop run-python run-php run-java run-rust run-go run-node run-c run-cpp logs-python logs-php logs-java logs-rust logs-go logs-node logs-c logs-cpp
