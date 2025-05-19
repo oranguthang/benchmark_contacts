@@ -3,7 +3,7 @@ project(drogon_contacts_service)
 
 set(CMAKE_CXX_STANDARD 17)
 
-find_package(Drogon REQUIRED COMPONENTS jsoncpp orm_postgresql)
+find_package(Drogon REQUIRED COMPONENTS jsoncpp orm_postgresql fmt)
 
 add_executable(server
     app/main.cpp
