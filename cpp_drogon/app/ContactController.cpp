@@ -115,7 +115,8 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         "FROM contacts WHERE 1=1";
 
     if (auto ext = req->getParameter("external_id"); !ext.empty()) {
-        sql += " AND external_id = '" + escape(ext) + "'";
+        // Преобразуем external_id из строки в число БЕЗ кавычек
+        sql += " AND external_id = " + ext;
     }
     if (auto ph = req->getParameter("phone_number"); !ph.empty()) {
         sql += " AND phone_number = '" + escape(ph) + "'";
@@ -141,16 +142,24 @@ void ContactController::getContacts(const HttpRequestPtr& req,
 
     auto onSuccess = [callback](const drogon::orm::Result &rows) {
         Json::Value arr(Json::arrayValue);
-        for (auto &r : rows) {
-            Json::Value c;
-            c["id"]            = r["id"].as<std::string>();
-            c["external_id"]   = r["external_id"].as<int>();
-            c["phone_number"]  = r["phone_number"].as<std::string>();
-            c["date_created"]  = r["date_created"].as<std::string>();
-            c["date_updated"]  = r["date_updated"].as<std::string>();
-            arr.append(c);
+        try {
+            for (auto &r : rows) {
+                Json::Value c;
+                c["id"] = r["id"].as<std::string>(); // UUID преобразуется в строку
+                c["external_id"] = r["external_id"].as<int>(); // Правильно, т.к. это INT
+                c["phone_number"] = r["phone_number"].as<std::string>();
+                c["date_created"] = r["date_created"].as<std::string>();
+                c["date_updated"] = r["date_updated"].as<std::string>();
+                arr.append(c);
+            }
+            callback(HttpResponse::newHttpJsonResponse(arr));
+        } catch (const std::exception &e) {
+            LOG_ERROR << "Error processing database result: " << e.what();
+            auto resp = HttpResponse::newHttpResponse();
+            resp->setStatusCode(k500InternalServerError);
+            resp->setBody("Error processing database result");
+            callback(resp);
         }
-        callback(HttpResponse::newHttpJsonResponse(arr));
     };
     auto onError = [callback](const drogon::orm::DrogonDbException &e) {
         LOG_ERROR << "DB error: " << e.base().what();
