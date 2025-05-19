@@ -13,15 +13,16 @@ endif()
 # Crow собирается без Boost
 add_definitions(-DCROW_MAIN)
 
-# Подключение зависимостей
+# Подключение libpqxx
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PQXX REQUIRED libpqxx)
-pkg_check_modules(NLOHMANN_JSON REQUIRED nlohmann_json3)
+
+# Подключение nlohmann_json
+find_package(nlohmann_json REQUIRED)
 
 # Включаем include директории
 include_directories(
     ${PQXX_INCLUDE_DIRS}
-    ${NLOHMANN_JSON_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -34,6 +35,7 @@ add_executable(server
 # Линкуем библиотеки
 target_link_libraries(server
     ${PQXX_LIBRARIES}
+    nlohmann_json::nlohmann_json
 )
 
 # Оптимизации на релиз
