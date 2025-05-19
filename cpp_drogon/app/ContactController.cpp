@@ -94,38 +94,26 @@ void ContactController::getContacts(const HttpRequestPtr& req,
     using namespace drogon::orm;
 
     std::string query = "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE 1=1";
-    std::vector<std::string> conditions;
+    std::vector<std::any> params;
     int paramIndex = 1;
 
-    // параметры из запроса
-    std::optional<int> externalId;
-    std::optional<std::string> phoneNumber;
-    std::optional<size_t> limit;
-    std::optional<size_t> offset;
-
-    if (req->getOptionalParameter<int>("external_id")) {
-        conditions.push_back("external_id = $" + std::to_string(paramIndex++));
-        externalId = *req->getOptionalParameter<int>("external_id");
+    if (auto externalId = req->getOptionalParameter<int>("external_id")) {
+        query += " AND external_id = $" + std::to_string(paramIndex++);
+        params.emplace_back(*externalId);
     }
-    if (req->getOptionalParameter<std::string>("phone_number")) {
-        conditions.push_back("phone_number = $" + std::to_string(paramIndex++));
-        phoneNumber = *req->getOptionalParameter<std::string>("phone_number");
+    if (auto phoneNumber = req->getOptionalParameter<std::string>("phone_number")) {
+        query += " AND phone_number = $" + std::to_string(paramIndex++);
+        params.emplace_back(*phoneNumber);
     }
-
-    for (const auto& cond : conditions) {
-        query += " AND " + cond;
-    }
-
-    if (req->getOptionalParameter<size_t>("limit")) {
+    if (auto limit = req->getOptionalParameter<size_t>("limit")) {
         query += " LIMIT $" + std::to_string(paramIndex++);
-        limit = *req->getOptionalParameter<size_t>("limit");
+        params.emplace_back(static_cast<int>(*limit));
     }
-    if (req->getOptionalParameter<size_t>("offset")) {
+    if (auto offset = req->getOptionalParameter<size_t>("offset")) {
         query += " OFFSET $" + std::to_string(paramIndex++);
-        offset = *req->getOptionalParameter<size_t>("offset");
+        params.emplace_back(static_cast<int>(*offset));
     }
 
-    // колбэки успеха и ошибки
     auto onSuccess = [callback](const Result& r) {
         Json::Value result = Json::arrayValue;
         for (const auto& row : r) {
@@ -148,16 +136,22 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         callback(resp);
     };
 
-    // передаем параметры по одному
-    if (externalId && phoneNumber && limit && offset) {
-        dbClient_->execSqlAsync(query, onSuccess, onError, *externalId, *phoneNumber, *limit, *offset);
-    } else if (externalId && phoneNumber && limit) {
-        dbClient_->execSqlAsync(query, onSuccess, onError, *externalId, *phoneNumber, *limit);
-    } else if (externalId && phoneNumber) {
-        dbClient_->execSqlAsync(query, onSuccess, onError, *externalId, *phoneNumber);
-    } else if (externalId) {
-        dbClient_->execSqlAsync(query, onSuccess, onError, *externalId);
-    } else {
+    // Вызываем execSqlAsync с параметрами по количеству
+    if (params.empty()) {
         dbClient_->execSqlAsync(query, onSuccess, onError);
+    } else if (params.size() == 1) {
+        dbClient_->execSqlAsync(query, onSuccess, onError, params[0]);
+    } else if (params.size() == 2) {
+        dbClient_->execSqlAsync(query, onSuccess, onError, params[0], params[1]);
+    } else if (params.size() == 3) {
+        dbClient_->execSqlAsync(query, onSuccess, onError, params[0], params[1], params[2]);
+    } else if (params.size() == 4) {
+        dbClient_->execSqlAsync(query, onSuccess, onError, params[0], params[1], params[2], params[3]);
+    } else {
+        // максимум 4 параметра по нашей логике, иначе ошибка
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setBody("Too many parameters");
+        callback(resp);
     }
 }
