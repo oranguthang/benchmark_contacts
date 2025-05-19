@@ -21,7 +21,8 @@ void ContactController::ping(const HttpRequestPtr &req,
 void ContactController::createContact(const HttpRequestPtr &req,
                                       std::function<void (const HttpResponsePtr &)> &&callback) {
     auto json = req->getJsonObject();
-    if (!json || !(*json)["external_id"].isInt64() || !(*json)["phone_number"].isString()) {
+    if (!json || !json->isMember("external_id") || !json->isMember("phone_number") ||
+        !(*json)["external_id"].isInt() || !(*json)["phone_number"].isString()) {
         auto resp = HttpResponse::newHttpResponse();
         resp->setStatusCode(k400BadRequest);
         resp->setContentTypeCode(CT_TEXT_PLAIN);
@@ -34,13 +35,13 @@ void ContactController::createContact(const HttpRequestPtr &req,
     std::string phone_number = (*json)["phone_number"].asString();
 
     dbClient_->execSqlAsync(
-        "INSERT INTO contacts (external_id, phone_number) VALUES ($1, $2) RETURNING id, date_created, date_updated",
-        [external_id, phone_number, callback](const Result &r) {
+        "INSERT INTO contacts (external_id, phone_number) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING id, date_created, date_updated",
+        [callback](const Result &r) {
             if (r.empty()) {
                 auto resp = HttpResponse::newHttpResponse();
-                resp->setStatusCode(k500InternalServerError);
+                resp->setStatusCode(k409Conflict);
                 resp->setContentTypeCode(CT_TEXT_PLAIN);
-                resp->setBody("DB error");
+                resp->setBody("Contact already exists");
                 callback(resp);
                 return;
             }
@@ -48,8 +49,8 @@ void ContactController::createContact(const HttpRequestPtr &req,
             auto row = r[0];
             Json::Value result;
             result["id"] = row["id"].as<std::string>();
-            result["external_id"] = external_id;
-            result["phone_number"] = phone_number;
+            result["external_id"] = row["external_id"].as<int>();
+            result["phone_number"] = row["phone_number"].as<std::string>();
             result["date_created"] = row["date_created"].as<std::string>();
             result["date_updated"] = row["date_updated"].as<std::string>();
 
@@ -71,26 +72,32 @@ void ContactController::createContact(const HttpRequestPtr &req,
 void ContactController::getContacts(const HttpRequestPtr &req,
                                     std::function<void (const HttpResponsePtr &)> &&callback) {
     std::string query = "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE 1=1";
-    std::vector<std::string> params;
-    int paramIdx = 1;
+    std::vector<std::string> whereParams;
+    std::vector<std::string> limitOffsetParams;
 
     if (auto external_id = req->getParameter("external_id"); !external_id.empty()) {
-        query += " AND external_id = $" + std::to_string(paramIdx++);
-        params.push_back(external_id);
+        query += " AND external_id = $" + std::to_string(whereParams.size() + 1);
+        whereParams.push_back(external_id);
     }
 
     if (auto phone = req->getParameter("phone_number"); !phone.empty()) {
-        query += " AND phone_number = $" + std::to_string(paramIdx++);
-        params.push_back(phone);
+        query += " AND phone_number = $" + std::to_string(whereParams.size() + 1);
+        whereParams.push_back(phone);
     }
 
     if (auto limit = req->getParameter("limit"); !limit.empty()) {
-        query += " LIMIT " + limit;
+        query += " LIMIT $" + std::to_string(whereParams.size() + 1);
+        limitOffsetParams.push_back(limit);
     }
 
     if (auto offset = req->getParameter("offset"); !offset.empty()) {
-        query += " OFFSET " + offset;
+        query += " OFFSET $" + std::to_string(whereParams.size() + limitOffsetParams.size() + 1);
+        limitOffsetParams.push_back(offset);
     }
+
+    std::vector<std::string> allParams;
+    allParams.insert(allParams.end(), whereParams.begin(), whereParams.end());
+    allParams.insert(allParams.end(), limitOffsetParams.begin(), limitOffsetParams.end());
 
     dbClient_->execSqlAsync(
         query,
@@ -116,18 +123,24 @@ void ContactController::getContacts(const HttpRequestPtr &req,
             resp->setBody(std::string("DB error: ") + e.base().what());
             callback(resp);
         },
-        params
+        allParams
     );
 }
 
 void ContactController::initRoutes() {
     auto dbClient = drogon::app().getDbClient();
+    if (!dbClient) {
+        LOG_ERROR << "Database client is not initialized!";
+        return;
+    }
+
     auto controller = std::make_shared<ContactController>(dbClient);
 
     drogon::app().registerHandler("/ping", [controller](const HttpRequestPtr &req,
                                                         std::function<void (const HttpResponsePtr &)> callback) {
         controller->ping(req, std::move(callback));
-    });
+    },
+    {Get});
 
     drogon::app().registerHandler("/contacts", [controller](const HttpRequestPtr &req,
                                                             std::function<void (const HttpResponsePtr &)> callback) {
@@ -140,5 +153,6 @@ void ContactController::initRoutes() {
             resp->setStatusCode(k405MethodNotAllowed);
             callback(resp);
         }
-    });
+    },
+    {Get, Post});
 }
