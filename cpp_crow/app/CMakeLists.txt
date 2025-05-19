@@ -13,18 +13,26 @@ add_definitions(-DCROW_MAIN)
 
 include(FetchContent)
 
-# Crow с master ветки (где нормально отключается Boost)
+FetchContent_Declare(
+  asio
+  GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
+  GIT_TAG asio-1-30-1
+)
+FetchContent_MakeAvailable(asio)
+
+set(ASIO_INCLUDE_DIR ${asio_SOURCE_DIR}/asio/include)
+set(CROW_USE_BOOST OFF CACHE BOOL "" FORCE)
+set(CROW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(CROW_ENABLE_SSL OFF CACHE BOOL "" FORCE)
+set(CROW_ENABLE_COMPRESSION OFF CACHE BOOL "" FORCE)
+set(CROW_AMALGAMATE OFF CACHE BOOL "" FORCE)
+set(CROW_ENABLE_LOGGING OFF CACHE BOOL "" FORCE)
+
 FetchContent_Declare(
   crow
   GIT_REPOSITORY https://github.com/CrowCpp/Crow.git
   GIT_TAG v1.0+2
 )
-# Отключаем всё лишнее перед MakeAvailable
-set(CROW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(CROW_ENABLE_SSL OFF CACHE BOOL "" FORCE)
-set(CROW_ENABLE_COMPRESSION OFF CACHE BOOL "" FORCE)
-set(CROW_USE_BOOST OFF CACHE BOOL "" FORCE)
-
 FetchContent_MakeAvailable(crow)
 
 find_package(PkgConfig REQUIRED)
