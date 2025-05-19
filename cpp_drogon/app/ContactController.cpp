@@ -91,34 +91,38 @@ void ContactController::getContacts(const HttpRequestPtr &req,
                                     std::function<void (const HttpResponsePtr &)> &&callback) {
     std::string query = "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE 1=1";
 
-    auto external_id = req->getOptionalParameter<int>("external_id");
-    auto phone_number = req->getOptionalParameter<std::string>("phone_number");
-    auto limit = req->getOptionalParameter<size_t>("limit");
-    auto offset = req->getOptionalParameter<size_t>("offset");
+    std::vector<std::string> conditions;
+    std::vector<std::variant<int, std::string, size_t>> values;
+    int paramIndex = 1;
 
-    std::vector<const char*> params;
-    if (external_id) {
-        query += " AND external_id = $1";
-        params.push_back(std::to_string(*external_id).c_str());
+    if (req->getOptionalParameter<int>("external_id")) {
+        conditions.push_back("external_id = $" + std::to_string(paramIndex++));
+        values.emplace_back(*req->getOptionalParameter<int>("external_id"));
     }
-    if (phone_number) {
-        query += " AND phone_number = $2";
-        params.push_back(phone_number->c_str());
-    }
-    if (limit) {
-        query += " LIMIT $3";
-        params.push_back(std::to_string(*limit).c_str());
-    }
-    if (offset) {
-        query += " OFFSET $4";
-        params.push_back(std::to_string(*offset).c_str());
+    if (req->getOptionalParameter<std::string>("phone_number")) {
+        conditions.push_back("phone_number = $" + std::to_string(paramIndex++));
+        values.emplace_back(*req->getOptionalParameter<std::string>("phone_number"));
     }
 
+    for (const auto &cond : conditions) {
+        query += " AND " + cond;
+    }
+
+    if (req->getOptionalParameter<size_t>("limit")) {
+        query += " LIMIT $" + std::to_string(paramIndex++);
+        values.emplace_back(*req->getOptionalParameter<size_t>("limit"));
+    }
+    if (req->getOptionalParameter<size_t>("offset")) {
+        query += " OFFSET $" + std::to_string(paramIndex++);
+        values.emplace_back(*req->getOptionalParameter<size_t>("offset"));
+    }
+
+    // Выполняем запрос
     dbClient_->execSqlAsync(
         query,
         [callback](const Result &r) {
             Json::Value result = Json::arrayValue;
-            for (auto row : r) {
+            for (const auto &row : r) {
                 Json::Value contact;
                 contact["id"] = row["id"].as<std::string>();
                 contact["external_id"] = row["external_id"].as<int>();
@@ -137,6 +141,7 @@ void ContactController::getContacts(const HttpRequestPtr &req,
             resp->setContentTypeCode(CT_TEXT_PLAIN);
             resp->setBody(std::string("DB error: ") + e.base().what());
             callback(resp);
-        }
+        },
+        values // передаём параметры одним списком
     );
 }
