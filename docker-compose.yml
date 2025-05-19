@@ -134,7 +134,7 @@ services:
 
   rust_axum:
     <<: *common_service
-    build: rust_axum
+    build: ./rust_axum
 
   benchmark_tests_rust:
     <<: *common_benchmark_tests
@@ -194,7 +194,7 @@ services:
 
   cpp_drogon:
     <<: *common_service
-    build: cpp_drogon
+    build: ./cpp_drogon
 
   benchmark_tests_cpp:
     <<: *common_benchmark_tests
