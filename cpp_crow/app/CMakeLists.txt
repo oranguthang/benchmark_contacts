@@ -5,19 +5,29 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Включить оптимизацию для релиза
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Crow собирается без Boost
+# Crow без Boost
 add_definitions(-DCROW_MAIN)
 
-# Подключение libpqxx
+# Подключаем внешние зависимости через FetchContent
+include(FetchContent)
+
+# Crow
+FetchContent_Declare(
+  crow
+  GIT_REPOSITORY https://github.com/CrowCpp/Crow.git
+  GIT_TAG v1.0+2  # можно актуальный релиз или master
+)
+FetchContent_MakeAvailable(crow)
+
+# libpqxx
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PQXX REQUIRED libpqxx)
 
-# Подключение nlohmann_json
+# nlohmann_json
 find_package(nlohmann_json REQUIRED)
 
 # Включаем include директории
@@ -26,7 +36,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# Добавляем исходники
+# Добавляем исполняемый файл
 add_executable(server
     main.cpp
     connection_pool.hpp
@@ -36,9 +46,10 @@ add_executable(server
 target_link_libraries(server
     ${PQXX_LIBRARIES}
     nlohmann_json::nlohmann_json
+    crow
 )
 
-# Оптимизации на релиз
+# Оптимизация на релиз
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     target_compile_options(server PRIVATE -O3 -march=native -flto)
     target_link_options(server PRIVATE -flto)
