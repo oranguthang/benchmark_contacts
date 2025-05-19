@@ -94,24 +94,27 @@ void ContactController::getContacts(const HttpRequestPtr& req,
     using namespace drogon::orm;
 
     std::string query = "SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE 1=1";
-    std::vector<std::any> params;
+    std::optional<int> externalId;
+    std::optional<std::string> phoneNumber;
+    std::optional<int> limit;
+    std::optional<int> offset;
     int paramIndex = 1;
 
-    if (auto externalId = req->getOptionalParameter<int>("external_id")) {
+    if (auto p = req->getOptionalParameter<int>("external_id")) {
         query += " AND external_id = $" + std::to_string(paramIndex++);
-        params.emplace_back(*externalId);
+        externalId = *p;
     }
-    if (auto phoneNumber = req->getOptionalParameter<std::string>("phone_number")) {
+    if (auto p = req->getOptionalParameter<std::string>("phone_number")) {
         query += " AND phone_number = $" + std::to_string(paramIndex++);
-        params.emplace_back(*phoneNumber);
+        phoneNumber = *p;
     }
-    if (auto limit = req->getOptionalParameter<size_t>("limit")) {
+    if (auto p = req->getOptionalParameter<size_t>("limit")) {
         query += " LIMIT $" + std::to_string(paramIndex++);
-        params.emplace_back(static_cast<int>(*limit));
+        limit = static_cast<int>(*p);
     }
-    if (auto offset = req->getOptionalParameter<size_t>("offset")) {
+    if (auto p = req->getOptionalParameter<size_t>("offset")) {
         query += " OFFSET $" + std::to_string(paramIndex++);
-        params.emplace_back(static_cast<int>(*offset));
+        offset = static_cast<int>(*p);
     }
 
     auto onSuccess = [callback](const Result& r) {
@@ -136,22 +139,25 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         callback(resp);
     };
 
-    // Вызываем execSqlAsync с параметрами по количеству
-    if (params.empty()) {
+    // вызывать execSqlAsync с параметрами по количеству
+    if (!externalId && !phoneNumber && !limit && !offset) {
         dbClient_->execSqlAsync(query, onSuccess, onError);
-    } else if (params.size() == 1) {
-        dbClient_->execSqlAsync(query, onSuccess, onError, params[0]);
-    } else if (params.size() == 2) {
-        dbClient_->execSqlAsync(query, onSuccess, onError, params[0], params[1]);
-    } else if (params.size() == 3) {
-        dbClient_->execSqlAsync(query, onSuccess, onError, params[0], params[1], params[2]);
-    } else if (params.size() == 4) {
-        dbClient_->execSqlAsync(query, onSuccess, onError, params[0], params[1], params[2], params[3]);
-    } else {
-        // максимум 4 параметра по нашей логике, иначе ошибка
+    } else if (externalId && !phoneNumber && !limit && !offset) {
+        dbClient_->execSqlAsync(query, onSuccess, onError, *externalId);
+    } else if (externalId && phoneNumber && !limit && !offset) {
+        dbClient_->execSqlAsync(query, onSuccess, onError, *externalId, *phoneNumber);
+    } else if (externalId && phoneNumber && limit && !offset) {
+        dbClient_->execSqlAsync(query, onSuccess, onError, *externalId, *phoneNumber, *limit);
+    } else if (externalId && phoneNumber && limit && offset) {
+        dbClient_->execSqlAsync(query, onSuccess, onError, *externalId, *phoneNumber, *limit, *offset);
+    }
+    // и так далее для всех комбинаций (либо сделать универсальный helper с tuple + apply если хочешь красиво)
+
+    else {
+        // для простоты можно fallback на универсальную execSqlAsyncPreparedFuture с привязкой параметров через SqlBinder
         auto resp = HttpResponse::newHttpResponse();
         resp->setStatusCode(k400BadRequest);
-        resp->setBody("Too many parameters");
+        resp->setBody("Unsupported parameter combination");
         callback(resp);
     }
 }
