@@ -1,39 +1,36 @@
 #include <drogon/drogon.h>
 #include "ContactController.h"
-#include <cstdlib> // для getenv
+#include <cstdlib>
+#include <fmt/core.h> // Добавляем заголовочный файл fmt
 
 int main() {
     // Установка уровня логирования
     drogon::app().setLogLevel(trantor::Logger::kDebug);
 
-    // Получаем параметры БД из переменных окружения или используем значения по умолчанию
-    const char* dbHost = std::getenv("DB_HOST");
-    const char* dbPort = std::getenv("DB_PORT");
-    const char* dbName = std::getenv("DB_NAME");
-    const char* dbUser = std::getenv("DB_USER");
-    const char* dbPass = std::getenv("DB_PASSWORD");
+    // Получение параметров из переменных окружения
+    auto getEnv = [](const char* name, const char* def) {
+        const char* val = std::getenv(name);
+        return val ? val : def;
+    };
 
     // Подключение к PostgreSQL
     try {
-        // Создаем конфигурацию базы данных для PostgreSQL
-        drogon::orm::PostgresConfig pgConfig;
-        pgConfig.host = dbHost ? dbHost : "db";
-        pgConfig.port = dbPort ? std::stoi(dbPort) : 5432;
-        pgConfig.dbname = dbName ? dbName : "contacts_db";
-        pgConfig.user = dbUser ? dbUser : "user";
-        pgConfig.password = dbPass ? dbPass : "password";
-        pgConfig.connectionNumber = 1;
-        pgConfig.clientName = "default";
+        // Формируем строку подключения
+        std::string connStr = fmt::format(
+            "host={} port={} dbname={} user={} password={}",
+            getEnv("DB_HOST", "db"),
+            getEnv("DB_PORT", "5432"),
+            getEnv("DB_NAME", "contacts_db"),
+            getEnv("DB_USER", "user"),
+            getEnv("DB_PASSWORD", "password")
+        );
 
-        // Добавляем клиент базы данных
-        drogon::app().addDbClient(pgConfig);
-
-        // Получаем клиент базы данных
-        auto dbClient = drogon::app().getDbClient("default");
-        if (!dbClient) {
-            LOG_ERROR << "Failed to get database client";
-            return 1;
-        }
+        // Создаем клиент базы данных
+        auto dbClient = drogon::orm::DbClient::newPgClient(
+            connStr,
+            1,  // Количество соединений
+            "default"  // Имя клиента
+        );
 
         // Создаем контроллер
         auto controller = std::make_shared<ContactController>(dbClient);
@@ -43,11 +40,12 @@ int main() {
         return 1;
     }
 
-    // Получаем порт из переменных окружения
-    const char* portStr = std::getenv("APP_PORT");
-    uint16_t port = portStr ? std::stoi(portStr) : 8080;
+    // Запуск сервера
+    uint16_t port = static_cast<uint16_t>(
+        std::stoi(getEnv("APP_PORT", "8080"))
+    );
 
-    // Добавляем слушатель
+    LOG_INFO << "Starting server on port " << port;
     drogon::app()
         .addListener("0.0.0.0", port)
         .setThreadNum(4)
