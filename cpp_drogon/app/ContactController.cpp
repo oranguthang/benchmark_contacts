@@ -90,7 +90,17 @@ void ContactController::createContact(const HttpRequestPtr &req,
 void ContactController::getContacts(const HttpRequestPtr& req,
                                     std::function<void(const HttpResponsePtr&)>&& callback)
 {
-    // Получаем клиента
+    // Простой эскейп: заменяем одинарную кавычку на две
+    auto escape = [](const std::string &s) {
+        std::string r;
+        r.reserve(s.size());
+        for (char c : s) {
+            if (c == '\'') r += "''";
+            else r += c;
+        }
+        return r;
+    };
+
     auto client = drogon::app().getDbClient();
     if (!client) {
         auto resp = HttpResponse::newHttpResponse();
@@ -100,22 +110,18 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         return;
     }
 
-    // Базовый запрос
     std::string sql =
         "SELECT id, external_id, phone_number, date_created, date_updated "
         "FROM contacts WHERE 1=1";
 
-    // Добавляем фильтры по внешнему ID и номеру
     if (auto ext = req->getParameter("external_id"); !ext.empty()) {
-        sql += " AND external_id = '" + client->sqlEscape(ext) + "'";
+        sql += " AND external_id = '" + escape(ext) + "'";
     }
     if (auto ph = req->getParameter("phone_number"); !ph.empty()) {
-        sql += " AND phone_number = '" + client->sqlEscape(ph) + "'";
+        sql += " AND phone_number = '" + escape(ph) + "'";
     }
 
-    // Парсим limit/offset (или ставим дефолт)
-    int limit = 10000;
-    int offset = 0;
+    int limit = 10000, offset = 0;
     try {
         if (auto l = req->getParameter("limit"); !l.empty())
             limit = std::stoi(l);
@@ -129,27 +135,23 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         return;
     }
 
-    // Добавляем сортировку, лимит и оффсет
     sql += " ORDER BY id"
            " LIMIT " + std::to_string(limit) +
            " OFFSET " + std::to_string(offset);
 
-    // Колбэк на успех
     auto onSuccess = [callback](const drogon::orm::Result &rows) {
         Json::Value arr(Json::arrayValue);
         for (auto &r : rows) {
             Json::Value c;
-            c["id"]           = r["id"].as<std::string>();
-            c["external_id"]  = r["external_id"].as<int>();
-            c["phone_number"] = r["phone_number"].as<std::string>();
-            c["date_created"] = r["date_created"].as<std::string>();
-            c["date_updated"] = r["date_updated"].as<std::string>();
+            c["id"]            = r["id"].as<std::string>();
+            c["external_id"]   = r["external_id"].as<int>();
+            c["phone_number"]  = r["phone_number"].as<std::string>();
+            c["date_created"]  = r["date_created"].as<std::string>();
+            c["date_updated"]  = r["date_updated"].as<std::string>();
             arr.append(c);
         }
         callback(HttpResponse::newHttpJsonResponse(arr));
     };
-
-    // Колбэк на ошибку
     auto onError = [callback](const drogon::orm::DrogonDbException &e) {
         LOG_ERROR << "DB error: " << e.base().what();
         auto resp = HttpResponse::newHttpResponse();
@@ -158,6 +160,5 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         callback(resp);
     };
 
-    // И наконец — выполняем
     client->execSqlAsync(sql, onSuccess, onError);
 }
