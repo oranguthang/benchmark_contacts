@@ -91,56 +91,105 @@ void ContactController::getContacts(const HttpRequestPtr& req,
                                   std::function<void(const HttpResponsePtr&)>&& callback)
 {
     auto client = drogon::app().getDbClient();
+    if (!client) {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k500InternalServerError);
+        resp->setBody("Database connection failed");
+        callback(resp);
+        return;
+    }
 
+    // Базовый запрос
     std::string sql = "SELECT id, external_id, name, phone FROM contacts WHERE 1=1";
-    std::vector<std::string> params;
 
-    // Динамическая сборка фильтров с параметрами
-    if (auto external_id = req->getParameter("external_id"); !external_id.empty()) {
-        sql += " AND external_id = $1";
-        params.push_back(external_id);
+    // Параметры для фильтрации
+    std::string external_id_filter;
+    std::string phone_filter;
+    std::string external_id;
+    std::string phone;
+
+    // Добавляем фильтры
+    if (!(external_id = req->getParameter("external_id")).empty()) {
+        external_id_filter = " AND external_id = $1";
+        sql += external_id_filter;
     }
 
-    if (auto phone = req->getParameter("phone"); !phone.empty()) {
-        sql += (params.empty() ? " AND phone = $1" : " AND phone = $2");
-        params.push_back(phone);
+    if (!(phone = req->getParameter("phone")).empty()) {
+        phone_filter = external_id_filter.empty() ? " AND phone = $1" : " AND phone = $2";
+        sql += phone_filter;
     }
 
-    // Лимит и оффсет по умолчанию
+    // Лимит и оффсет
     int limit = 100;
     int offset = 0;
 
-    if (auto limit_param = req->getParameter("limit"); !limit_param.empty()) {
-        limit = std::stoi(limit_param);
+    try {
+        if (auto limit_param = req->getParameter("limit"); !limit_param.empty()) {
+            limit = std::stoi(limit_param);
+        }
+        if (auto offset_param = req->getParameter("offset"); !offset_param.empty()) {
+            offset = std::stoi(offset_param);
+        }
+    } catch (const std::exception& e) {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setBody("Invalid limit or offset value");
+        callback(resp);
+        return;
     }
 
-    if (auto offset_param = req->getParameter("offset"); !offset_param.empty()) {
-        offset = std::stoi(offset_param);
+    sql += " ORDER BY id LIMIT " + std::to_string(limit) +
+           " OFFSET " + std::to_string(offset);
+
+    // Выполняем запрос с правильной передачей параметров
+    if (!external_id.empty() && !phone.empty()) {
+        client->execSqlAsync(
+            sql,
+            [callback](const drogon::orm::Result &result) {
+                Json::Value response(Json::arrayValue);
+                for (const auto &row : result) {
+                    Json::Value contact;
+                    contact["id"] = row["id"].as<int>();
+                    contact["external_id"] = row["external_id"].as<std::string>();
+                    contact["name"] = row["name"].as<std::string>();
+                    contact["phone"] = row["phone"].as<std::string>();
+                    response.append(contact);
+                }
+                auto resp = HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+            },
+            [callback](const drogon::orm::DrogonDbException &e) {
+                LOG_ERROR << "Database error: " << e.base().what();
+                auto resp = HttpResponse::newHttpResponse();
+                resp->setStatusCode(k500InternalServerError);
+                resp->setBody("Database error occurred");
+                callback(resp);
+            },
+            external_id,
+            phone
+        );
     }
-
-    sql += " ORDER BY id";
-    sql += " LIMIT " + std::to_string(limit);
-    sql += " OFFSET " + std::to_string(offset);
-
-    // Выполнение запроса с параметрами
-    client->execSqlAsync(
-        sql,
-        [callback](const drogon::orm::Result &result) {
-            Json::Value response(Json::arrayValue);
-            for (const auto &row : result) {
-                Json::Value contact;
-                contact["id"] = row["id"].as<int>();
-                contact["external_id"] = row["external_id"].as<std::string>();
-                contact["name"] = row["name"].as<std::string>();
-                contact["phone"] = row["phone"].as<std::string>();
-                response.append(contact);
-            }
-            auto resp = HttpResponse::newHttpJsonResponse(response);
-            callback(resp);
-        },
-        [](const drogon::orm::DrogonDbException &e) {
-            LOG_ERROR << "Database error: " << e.base().what();
-        },
-        params  // Передаем параметры запроса
-    );
+    else if (!external_id.empty()) {
+        client->execSqlAsync(
+            sql,
+            [callback](const drogon::orm::Result &result) { /* same as above */ },
+            [callback](const drogon::orm::DrogonDbException &e) { /* same as above */ },
+            external_id
+        );
+    }
+    else if (!phone.empty()) {
+        client->execSqlAsync(
+            sql,
+            [callback](const drogon::orm::Result &result) { /* same as above */ },
+            [callback](const drogon::orm::DrogonDbException &e) { /* same as above */ },
+            phone
+        );
+    }
+    else {
+        client->execSqlAsync(
+            sql,
+            [callback](const drogon::orm::Result &result) { /* same as above */ },
+            [callback](const drogon::orm::DrogonDbException &e) { /* same as above */ }
+        );
+    }
 }
