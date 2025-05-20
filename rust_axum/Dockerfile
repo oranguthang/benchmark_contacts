@@ -22,10 +22,12 @@ COPY --from=chef-deps /app/recipe.json recipe.json
 RUN cargo install cargo-chef \
     && cargo chef cook --release --recipe-path recipe.json
 
-# Копируем весь исходный код и подготовленный sqlx-data.json
+# Копируем весь исходный код
 COPY ./app/src ./src
-COPY ./app/.sqlx ./\.sqlx
 COPY ./app/Cargo.toml ./
+
+# Копируем подготовленный sqlx-data.json (если есть) из корня контекста
+COPY ./app/.sqlx ./.sqlx
 
 # Сборка релизного бинарника с нативной оптимизацией
 RUN RUSTFLAGS="-C target-cpu=native" \
