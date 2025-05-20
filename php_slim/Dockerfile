@@ -1,6 +1,6 @@
-FROM php:8.1-cli-alpine
+FROM php:8.2-cli-alpine
 
-# 1) runtime-libs
+# 1) runtime-libs для GD и pdo_pgsql
 RUN apk add --no-cache \
       postgresql-libs \
       libpng \
@@ -18,7 +18,7 @@ RUN apk add --no-cache --virtual .build-deps \
 
 WORKDIR /var/www
 
-# 3) Composer + dependencies (в composer.json подключён spiral/roadrunner)
+# 3) composer
 COPY app/composer.json app/composer.lock ./
 RUN curl -sS https://getcomposer.org/installer | php && \
     mv composer.phar /usr/local/bin/composer && \
@@ -28,10 +28,10 @@ RUN curl -sS https://getcomposer.org/installer | php && \
 # 4) код приложения
 COPY app /var/www
 
-# передаём CPU_CORES внутрь
-ENV CPU_CORES=8
+# 5) RR CLI из vendor/bin
+ENV CPU_CORES=8 \
+    PATH="/var/www/vendor/bin:${PATH}"
 
 EXPOSE 8080
 
-# 5) запустить RR из vendor/bin
-CMD ["vendor/bin/rr", "serve", "-c", ".rr.yaml"]
+CMD ["rr", "serve", "-c", ".rr.yaml"]
