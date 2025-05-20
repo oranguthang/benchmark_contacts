@@ -34,9 +34,11 @@ RUN RUSTFLAGS="-C target-cpu=native" \
     cargo build --release \
     && strip target/release/rust_axum
 
-### СТАДИЯ 3: минимальный рантайм
-FROM debian:bullseye-slim AS runtime
-RUN apt-get update && apt-get install -y libpq5 && rm -rf /var/lib/apt/lists/*
+### СТАДИЯ 3: минимальный рантайм на Bookworm
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+ && apt-get install -y libpq5 \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/rust_axum ./
 
