@@ -3,43 +3,60 @@ require 'vendor/autoload.php';
 
 use Slim\Factory\AppFactory;
 use DI\Container;
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
 
 $container = new Container();
 AppFactory::setContainer($container);
 $app = AppFactory::create();
 
+// Подключение к БД — у вас в docker-compose должен быть сервис db,
+// создающий базу contacts_db с пользователем user/password
 $container->set('db', function() {
-    return new PDO('pgsql:host=db;dbname=contacts_db', 'user', 'password', [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    ]);
+    $pdo = new PDO(
+        'pgsql:host=db;dbname=contacts_db',
+        'user',
+        'password',
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    );
+    return $pdo;
 });
 
-$app->post('/contacts', function ($request, $response) use ($container) {
-    $data = $request->getParsedBody();
+/**
+ * POST /contacts
+ * Вставляем запись и сразу возвращаем её полностью в формате JSON
+ */
+$app->post('/contacts', function (Request $request, Response $response) use ($container) {
+    $data = (array)$request->getParsedBody();
 
-    // В PostgreSQL у вас должен быть DEFAULT-значок для id (UUID)
-    // и DEFAULT now() для date_created/date_updated
-    $stmt = $container->get('db')->prepare(
-        'INSERT INTO contacts (external_id, phone_number)
-         VALUES (:external_id, :phone_number)
-         RETURNING id, external_id, phone_number, date_created, date_updated'
-    );
+    $sql = <<<SQL
+INSERT INTO contacts (external_id, phone_number)
+VALUES (:external_id, :phone_number)
+RETURNING id, external_id, phone_number, date_created, date_updated
+SQL;
+
+    $stmt = $container->get('db')->prepare($sql);
     $stmt->execute([
         ':external_id'  => $data['external_id'],
         ':phone_number' => $data['phone_number'],
     ]);
 
+    // Забираем только что созданную запись
     $contact = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    $payload = json_encode($contact);
-    $response->getBody()->write($payload);
+    $payload = json_encode($contact, JSON_UNESCAPED_SLASHES);
 
+    $response->getBody()->write($payload);
     return $response
         ->withHeader('Content-Type', 'application/json')
         ->withStatus(201);
 });
 
-$app->get('/contacts', function ($request, $response) use ($container) {
+/**
+ * GET /contacts
+ * Возвращаем список, применяя фильтры limit, offset, external_id, phone_number
+ */
+$app->get('/contacts', function (Request $request, Response $response) use ($container) {
     $params = $request->getQueryParams();
     $limit  = isset($params['limit'])       ? min((int)$params['limit'], 10000) : 10000;
     $offset = isset($params['offset'])      ? (int)$params['offset']           : 0;
@@ -63,22 +80,21 @@ $app->get('/contacts', function ($request, $response) use ($container) {
     $bind[':offset'] = $offset;
 
     $stmt = $container->get('db')->prepare($sql);
-
-    // sqlite/pgsql требуют чуть-чуть другого бинд-режима для LIMIT/OFFSET,
-    // но в PDO это должно сработать
-    foreach ($bind as $k=>$v) {
-        $paramType = is_int($v) ? PDO::PARAM_INT : PDO::PARAM_STR;
-        $stmt->bindValue($k, $v, $paramType);
+    foreach ($bind as $k => $v) {
+        $type = is_int($v) ? PDO::PARAM_INT : PDO::PARAM_STR;
+        $stmt->bindValue($k, $v, $type);
     }
-
     $stmt->execute();
     $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $response->getBody()->write(json_encode($contacts));
+    $response->getBody()->write(json_encode($contacts, JSON_UNESCAPED_SLASHES));
     return $response->withHeader('Content-Type', 'application/json');
 });
 
-$app->get('/ping', function ($request, $response) {
+/**
+ * GET /ping
+ */
+$app->get('/ping', function (Request $request, Response $response) {
     $response->getBody()->write('pong');
     return $response->withHeader('Content-Type', 'text/plain');
 });
