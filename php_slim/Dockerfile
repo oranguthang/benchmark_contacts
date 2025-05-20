@@ -1,6 +1,13 @@
+# 1) Stage «roadrunner»: берём официальный Go-бинарь rr
+FROM ghcr.io/roadrunner-server/roadrunner:2025.1.1 AS roadrunner
+
+# 2) Stage «app»: базовый PHP-CLI
 FROM php:8.2-cli-alpine
 
-# runtime-libs для GD и pdo_pgsql
+# 3) Скопировать rr из первого stage
+COPY --from=roadrunner /usr/bin/rr /usr/local/bin/rr
+
+# 4) Установить runtime-библиотеки (измените/дополните по нуждам)
 RUN apk add --no-cache \
       postgresql-libs \
       libpng \
@@ -8,7 +15,7 @@ RUN apk add --no-cache \
       freetype \
       zlib
 
-# build-deps → собрать расширения → удалить build-deps
+# 5) Установить dev-зависимости, собрать расширения и очистить их
 RUN apk add --no-cache --virtual .build-deps \
       autoconf \
       gcc \
@@ -28,20 +35,18 @@ RUN apk add --no-cache --virtual .build-deps \
 
 WORKDIR /var/www
 
-# composer
+# 6) Скопировать composer-манифесты и поставить зависимости
 COPY app/composer.json app/composer.lock ./
 RUN curl -sS https://getcomposer.org/installer | php && \
     mv composer.phar /usr/local/bin/composer && \
     composer install --no-scripts --no-autoloader && \
     composer dump-autoload --optimize
 
-# код приложения
+# 7) Скопировать весь код приложения
 COPY app /var/www
 
 # передаём CPU_CORES внутрь
 ENV CPU_CORES=8
 
 EXPOSE 8080
-
-# запускаем RoadRunner
-CMD ["vendor/bin/rr", "serve", "-c", ".rr.yaml"]
+CMD ["rr", "serve", "-c", ".rr.yaml"]
