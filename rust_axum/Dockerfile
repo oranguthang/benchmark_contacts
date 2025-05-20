@@ -36,9 +36,13 @@ RUN RUSTFLAGS="-C target-cpu=native" \
 
 ### СТАДИЯ 3: минимальный рантайм на Bookworm
 FROM debian:bookworm-slim AS runtime
+
 RUN apt-get update \
- && apt-get install -y libpq5 \
+ && apt-get install -y \
+      libpq5 \
+      curl \
  && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY --from=builder /app/target/release/rust_axum ./
 
