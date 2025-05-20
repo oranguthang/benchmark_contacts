@@ -1,8 +1,12 @@
 {
   "require": {
-    "slim/slim": "^4.0",
-    "slim/psr7": "^1.4",
-    "illuminate/database": "^8.0",
-    "php-di/php-di": "^6.3"
+    "slim/slim": "^4.13",
+    "slim/psr7": "^1.5",
+    "php-di/php-di": "^6.3",
+    "nyholm/psr7": "^1.5",
+    "spiral/roadrunner": "^2.12"
+  },
+  "scripts": {
+    "rr": "rr serve -c .rr.yaml"
   }
 }

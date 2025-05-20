@@ -1,14 +1,14 @@
 FROM php:8.1-cli-alpine
 
-# Сначала ставим runtime-зависимость — библиотеку libpq
+# runtime: libpq для pdo_pgsql
 RUN apk add --no-cache postgresql-libs
 
-# А потом ставим только те пакеты, что нужны для сборки, и удаляем их после
+# build & compile: GD, PDO_PGSQL и sockets
 RUN apk add --no-cache --virtual .build-deps \
       autoconf gcc g++ make musl-dev pkgconf \
       libpng-dev libjpeg-turbo-dev freetype-dev zlib-dev postgresql-dev && \
     docker-php-ext-configure gd --with-freetype --with-jpeg && \
-    docker-php-ext-install gd pdo pdo_pgsql && \
+    docker-php-ext-install gd pdo pdo_pgsql sockets && \
     apk del .build-deps
 
 WORKDIR /var/www
@@ -21,6 +21,8 @@ RUN curl -sS https://getcomposer.org/installer | php && \
 
 COPY ./app /var/www
 
+ENV CPU_CORES=8
+
 EXPOSE 8080
 
-CMD ["php", "-S", "0.0.0.0:8080", "index.php"]
+CMD ["composer", "rr", "serve", "-c", ".rr.yaml"]

@@ -1,0 +1,16 @@
+rpc:
+  # TCP-порт, по которому RR и PHP воркер общаются
+  listen: tcp://127.0.0.1:6001
+
+http:
+  address: "0.0.0.0:8080"
+  workers:
+    # точка входа в PHP-воркер
+    command: "php worker.php"
+    relay: "pipes"
+    pool:
+      # число PHP-воркеров = CPU_CORES
+      numWorkers: ${CPU_CORES}
+      # сколько ждать старта/остановки воркеров
+      allocateTimeout: 60s
+      destroyTimeout: 60s
