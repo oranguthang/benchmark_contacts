@@ -16,8 +16,9 @@ WORKDIR /var/www
 COPY app/composer.json ./
 
 RUN curl -sS https://getcomposer.org/installer | php && \
-    php composer.phar install --no-scripts --no-autoloader && \
-    php composer.phar dump-autoload --optimize
+    mv composer.phar /usr/local/bin/composer && \
+    composer install --no-scripts --no-autoloader && \
+    composer dump-autoload --optimize
 
 COPY ./app /var/www
 
