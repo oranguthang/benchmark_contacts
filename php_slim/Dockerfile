@@ -1,9 +1,14 @@
 FROM php:8.1-cli-alpine
 
-# runtime: libpq для pdo_pgsql
-RUN apk add --no-cache postgresql-libs
+# runtime-libs для GD и PostgreSQL
+RUN apk add --no-cache \
+      postgresql-libs \
+      libpng \
+      libjpeg-turbo \
+      freetype \
+      zlib
 
-# build & compile: GD, PDO_PGSQL и sockets
+# build-deps, сборка расширений и их удаление
 RUN apk add --no-cache --virtual .build-deps \
       autoconf gcc g++ make musl-dev pkgconf \
       libpng-dev libjpeg-turbo-dev freetype-dev zlib-dev postgresql-dev && \
@@ -13,17 +18,21 @@ RUN apk add --no-cache --virtual .build-deps \
 
 WORKDIR /var/www
 
+# composer
 COPY app/composer.json ./
-
 RUN curl -sS https://getcomposer.org/installer | php && \
     mv composer.phar /usr/local/bin/composer && \
     composer install --no-scripts --no-autoloader && \
     composer dump-autoload --optimize
 
-COPY ./app /var/www
+# код приложения
+COPY app /var/www
 
-ENV CPU_CORES=8
+# чтобы можно было вызвать rr напрямую
+ENV CPU_CORES=8 \
+    PATH="/var/www/vendor/bin:${PATH}"
 
 EXPOSE 8080
 
-CMD ["composer", "rr", "serve", "-c", ".rr.yaml"]
+# запускаем RoadRunner сразу из vendor/bin
+CMD ["rr", "serve", "-c", ".rr.yaml"]
