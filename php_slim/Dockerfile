@@ -1,6 +1,6 @@
 FROM php:8.1-cli-alpine
 
-# runtime-libs для GD и PostgreSQL
+# 1) Runtime-libs для GD + pdo_pgsql
 RUN apk add --no-cache \
       postgresql-libs \
       libpng \
@@ -8,7 +8,7 @@ RUN apk add --no-cache \
       freetype \
       zlib
 
-# build-deps, сборка расширений и их удаление
+# 2) Build-deps → сборка php-расширений → удаление build-deps
 RUN apk add --no-cache --virtual .build-deps \
       autoconf gcc g++ make musl-dev pkgconf \
       libpng-dev libjpeg-turbo-dev freetype-dev zlib-dev postgresql-dev && \
@@ -18,21 +18,26 @@ RUN apk add --no-cache --virtual .build-deps \
 
 WORKDIR /var/www
 
-# composer
+# 3) composer
 COPY app/composer.json ./
 RUN curl -sS https://getcomposer.org/installer | php && \
     mv composer.phar /usr/local/bin/composer && \
     composer install --no-scripts --no-autoloader && \
     composer dump-autoload --optimize
 
-# код приложения
+# 4) код
 COPY app /var/www
 
-# чтобы можно было вызвать rr напрямую
-ENV CPU_CORES=8 \
-    PATH="/var/www/vendor/bin:${PATH}"
+# 5) RoadRunner CLI (Go-бинарь)
+RUN apk add --no-cache curl tar && \
+    RR_VER=2.12.3 && \
+    curl -sSL "https://github.com/roadrunner-server/roadrunner/releases/download/v${RR_VER}/roadrunner_${RR_VER}_Linux_x86_64.tar.gz" \
+      | tar -xz -C /usr/local/bin
+
+# количество воркеров берём из переменной
+ENV CPU_CORES=8
 
 EXPOSE 8080
 
-# запускаем RoadRunner сразу из vendor/bin
-CMD ["rr", "serve", "-c", ".rr.yaml"]
+# финальная команда — настоящий rr
+CMD ["rr","serve","-c",".rr.yaml"]
