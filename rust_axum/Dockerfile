@@ -1,10 +1,15 @@
 ### СТАДИЯ 1: «билд» зависимостей
 FROM rust:1.82-slim AS chef-deps
-RUN apt-get update && apt-get install -y libpq-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Подготовка «рецепта» зависимостей
-COPY ./app/Cargo.toml ./
+# Копируем и Cargo.toml, и Cargo.lock — чтобы зафиксировать версию зависимостей
+COPY ./app/Cargo.toml ./app/Cargo.lock ./
+
+# Заглушка для исходников
 RUN mkdir -p src \
     && echo "fn main() { println!(\"hello\"); }" > src/main.rs
 
@@ -14,22 +19,27 @@ RUN cargo install cargo-chef \
 
 ### СТАДИЯ 2: установка зависимостей и сборка приложения
 FROM rust:1.82-slim AS builder
-RUN apt-get update && apt-get install -y libpq-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+ && apt-get install -y libpq-dev \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Кэшируем зависимости по recipe
-COPY --from=chef-deps /app/recipe.json recipe.json
+# Кэшируем зависимости по recipe.json
+COPY --from=chef-deps /app/recipe.json ./recipe.json
 RUN cargo install cargo-chef \
     && cargo chef cook --release --recipe-path recipe.json
 
+# Копируем манифесты и lock-файл перед сборкой — чтобы cargo build использовал Cargo.lock
+COPY ./app/Cargo.toml ./app/Cargo.lock ./
+
 # Копируем весь исходный код
 COPY ./app/src ./src
-COPY ./app/Cargo.toml ./
 
-# Копируем подготовленный sqlx-data.json (если есть) из корня контекста
+# Копируем кэш sqlx (если используешь offline)
 COPY ./app/.sqlx ./.sqlx
 
-# Сборка релизного бинарника с нативной оптимизацией
+# Собираем релизный бинарник с нативной оптимизацией
 RUN RUSTFLAGS="-C target-cpu=native" \
     cargo build --release \
     && strip target/release/rust_axum
@@ -38,12 +48,11 @@ RUN RUSTFLAGS="-C target-cpu=native" \
 FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update \
- && apt-get install -y \
-      libpq5 \
-      curl \
- && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y libpq5 curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
 COPY --from=builder /app/target/release/rust_axum ./
 
 ENV RUST_LOG=info

@@ -4,5 +4,7 @@
     sudo apt install cargo
     sudo apt install rustup
     rustup update stable
+
+    cd rust_axum/app
     DATABASE_URL=postgres://user:password@localhost:5432/contacts_db cargo install sqlx-cli --no-default-features --features postgres
     DATABASE_URL=postgres://user:password@localhost:5432/contacts_db cargo sqlx prepare
