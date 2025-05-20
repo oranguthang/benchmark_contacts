@@ -9,7 +9,7 @@ AppFactory::setContainer($container);
 $app = AppFactory::create();
 
 $container->set('db', function() {
-    return new PDO('pgsql:host=python_db;dbname=postgres', 'postgres', 'postgres');
+    return new PDO('pgsql:host=db;dbname=contacts_db', 'user', 'password');
 });
 
 $app->post('/contacts', function ($request, $response) use ($container) {

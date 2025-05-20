@@ -1,8 +1,12 @@
 FROM php:8.1-cli-alpine
 
+# Сначала ставим runtime-зависимость — библиотеку libpq
+RUN apk add --no-cache postgresql-libs
+
+# А потом ставим только те пакеты, что нужны для сборки, и удаляем их после
 RUN apk add --no-cache --virtual .build-deps \
-    autoconf gcc g++ make musl-dev pkgconf \
-    libpng-dev libjpeg-turbo-dev freetype-dev zlib-dev postgresql-dev postgresql-libs && \
+      autoconf gcc g++ make musl-dev pkgconf \
+      libpng-dev libjpeg-turbo-dev freetype-dev zlib-dev postgresql-dev && \
     docker-php-ext-configure gd --with-freetype --with-jpeg && \
     docker-php-ext-install gd pdo pdo_pgsql && \
     apk del .build-deps
