@@ -9,43 +9,69 @@ AppFactory::setContainer($container);
 $app = AppFactory::create();
 
 $container->set('db', function() {
-    return new PDO('pgsql:host=db;dbname=contacts_db', 'user', 'password');
+    return new PDO('pgsql:host=db;dbname=contacts_db', 'user', 'password', [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    ]);
 });
 
 $app->post('/contacts', function ($request, $response) use ($container) {
     $data = $request->getParsedBody();
-    $stmt = $container->get('db')->prepare('INSERT INTO contacts (external_id, phone_number) VALUES (?, ?)');
-    $success = $stmt->execute([$data['external_id'], $data['phone_number']]);
-    if (!$success) {
-        // Ошибка вставки
-        return $response->withStatus(500)->write('DB error');
-    }
-    return $response->withStatus(201);
+
+    // В PostgreSQL у вас должен быть DEFAULT-значок для id (UUID)
+    // и DEFAULT now() для date_created/date_updated
+    $stmt = $container->get('db')->prepare(
+        'INSERT INTO contacts (external_id, phone_number)
+         VALUES (:external_id, :phone_number)
+         RETURNING id, external_id, phone_number, date_created, date_updated'
+    );
+    $stmt->execute([
+        ':external_id'  => $data['external_id'],
+        ':phone_number' => $data['phone_number'],
+    ]);
+
+    $contact = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $payload = json_encode($contact);
+    $response->getBody()->write($payload);
+
+    return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(201);
 });
 
 $app->get('/contacts', function ($request, $response) use ($container) {
     $params = $request->getQueryParams();
-    $limit = isset($params['limit']) ? min((int)$params['limit'], 10000) : 10000;
-    $offset = isset($params['offset']) ? (int)$params['offset'] : 0;
-    $external_id = isset($params['external_id']) ? (int)$params['external_id'] : null;
-    $phone_number = isset($params['phone_number']) ? $params['phone_number'] : null;
+    $limit  = isset($params['limit'])       ? min((int)$params['limit'], 10000) : 10000;
+    $offset = isset($params['offset'])      ? (int)$params['offset']           : 0;
+    $external_id  = isset($params['external_id'])  ? (int)$params['external_id']      : null;
+    $phone_number = isset($params['phone_number']) ? $params['phone_number']         : null;
 
-    $sql = 'SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE TRUE';
-    $paramsList = [];
-    if ($external_id) {
-        $sql .= ' AND external_id = ?';
-        $paramsList[] = $external_id;
+    $sql = 'SELECT id, external_id, phone_number, date_created, date_updated
+            FROM contacts
+            WHERE TRUE';
+    $bind = [];
+    if ($external_id !== null) {
+        $sql .= ' AND external_id = :external_id';
+        $bind[':external_id'] = $external_id;
     }
-    if ($phone_number) {
-        $sql .= ' AND phone_number = ?';
-        $paramsList[] = $phone_number;
+    if ($phone_number !== null) {
+        $sql .= ' AND phone_number = :phone_number';
+        $bind[':phone_number'] = $phone_number;
     }
-    $sql .= ' LIMIT ? OFFSET ?';
-    $paramsList[] = $limit;
-    $paramsList[] = $offset;
+    $sql .= ' LIMIT :limit OFFSET :offset';
+    $bind[':limit']  = $limit;
+    $bind[':offset'] = $offset;
 
     $stmt = $container->get('db')->prepare($sql);
-    $stmt->execute($paramsList);
+
+    // sqlite/pgsql требуют чуть-чуть другого бинд-режима для LIMIT/OFFSET,
+    // но в PDO это должно сработать
+    foreach ($bind as $k=>$v) {
+        $paramType = is_int($v) ? PDO::PARAM_INT : PDO::PARAM_STR;
+        $stmt->bindValue($k, $v, $paramType);
+    }
+
+    $stmt->execute();
     $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $response->getBody()->write(json_encode($contacts));
