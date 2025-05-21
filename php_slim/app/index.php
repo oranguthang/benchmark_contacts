@@ -6,16 +6,33 @@ use DI\Container;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\ResponseInterface as Response;
 
-// контейнер
+// контейнер и создание приложения
 $container = new Container();
 AppFactory::setContainer($container);
 $app = AppFactory::create();
+
+// чтобы Slim парсил JSON, form-data и прочее
+$app->addBodyParsingMiddleware();
+
+// (опционально) маршрутизация и обработка ошибок
+$app->addRoutingMiddleware();
+$app->addErrorMiddleware(true, true, true);
+
+// общий пул PDO передаётся из worker.php
+global $pool;
 
 // POST /contacts
 $app->post('/contacts', function (Request $request, Response $response) use ($pool) {
     $data = (array)$request->getParsedBody();
 
-    // берём PDO из пула
+    if (empty($data['external_id']) || empty($data['phone_number'])) {
+        $error = ['error' => 'external_id и phone_number обязательны'];
+        $response->getBody()->write(json_encode($error));
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(400);
+    }
+
     /** @var PDO $pdo */
     $pdo = $pool->dequeue();
     try {
@@ -31,7 +48,6 @@ SQL
         ]);
         $contact = $stmt->fetch(PDO::FETCH_ASSOC);
     } finally {
-        // возвращаем соединение в пул
         $pool->enqueue($pdo);
     }
 
@@ -51,22 +67,20 @@ $app->get('/contacts', function (Request $request, Response $response) use ($poo
     $extId  = isset($params['external_id']) ? (int)$params['external_id'] : null;
     $phone  = $params['phone_number'] ?? null;
 
-    // готовим запрос
     $sql  = 'SELECT id, external_id, phone_number, date_created, date_updated FROM contacts WHERE TRUE';
     $bind = [];
     if ($extId !== null) {
-        $sql       .= ' AND external_id = :external_id';
+        $sql               .= ' AND external_id = :external_id';
         $bind[':external_id'] = $extId;
     }
     if ($phone !== null) {
-        $sql       .= ' AND phone_number = :phone_number';
+        $sql               .= ' AND phone_number = :phone_number';
         $bind[':phone_number'] = $phone;
     }
     $sql .= ' LIMIT :limit OFFSET :offset';
     $bind[':limit']  = $limit;
     $bind[':offset'] = $offset;
 
-    // пул
     /** @var PDO $pdo */
     $pdo = $pool->dequeue();
     try {
@@ -81,7 +95,7 @@ $app->get('/contacts', function (Request $request, Response $response) use ($poo
         $pool->enqueue($pdo);
     }
 
-    $response->getBody()->write(json_encode($contacts, JSON_UNESCAPED_SLASHES));
+    $response->getBody()->write(json_encode($contacts));
     return $response->withHeader('Content-Type', 'application/json');
 });
 
