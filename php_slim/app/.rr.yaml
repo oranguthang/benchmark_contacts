@@ -1,13 +1,10 @@
 version: '3'
 
-rpc:
-  listen: 'tcp://127.0.0.1:6001'
-
 server:
-  command: 'php worker.php'
-  relay: 'pipes'
+  command: "php worker.php"
+  relay: "tcp://127.0.0.1:6001"
 
 http:
-  address: '0.0.0.0:8080'
+  address: "0.0.0.0:8080"
   pool:
     num_workers: ${CPU_CORES}
