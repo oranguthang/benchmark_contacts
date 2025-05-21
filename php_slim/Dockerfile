@@ -28,9 +28,12 @@ RUN apk add --no-cache --virtual .build-deps \
       libjpeg-turbo-dev \
       freetype-dev \
       zlib-dev \
+      protobuf-dev \
       postgresql-dev && \
     docker-php-ext-configure gd --with-freetype --with-jpeg && \
     docker-php-ext-install gd pdo pdo_pgsql sockets && \
+    pecl install protobuf && \
+    docker-php-ext-enable protobuf && \
     apk del .build-deps
 
 WORKDIR /var/www

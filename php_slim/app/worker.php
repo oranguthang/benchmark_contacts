@@ -2,21 +2,18 @@
 declare(strict_types=1);
 
 use Spiral\RoadRunner\Worker;
-use Spiral\Goridge\SocketRelay;
 use Spiral\RoadRunner\Http\PSR7Worker;
 use Nyholm\Psr7\Factory\Psr17Factory;
 
 require __DIR__ . '/vendor/autoload.php';
 
-// создаём RR-воркер через сокет
-$relay  = new SocketRelay('127.0.0.1', 6001, SocketRelay::SOCK_TCP);
-$worker = new Worker($relay);
+// Воркер использует STDIN/STDOUT
+$worker = Worker::create();
 
-// PSR-7 фабрики
 $psr17 = new Psr17Factory();
 $psr7  = new PSR7Worker($worker, $psr17, $psr17, $psr17);
 
-// читаем CPU_CORES и строим пул
+// ваш код пула PDO и приложения Slim
 $cpuCores   = (int)(getenv('CPU_CORES') ?: 1);
 $totalConns = $cpuCores * 4;
 $perWorker  = max(1, (int)floor($totalConns / $cpuCores));
@@ -35,15 +32,12 @@ for ($i = 0; $i < $perWorker; $i++) {
     $pool->enqueue($pdo);
 }
 
-// загружаем Slim-приложение
 $app = require __DIR__ . '/index.php';
 
-// основной цикл
 while (true) {
     try {
         $request = $psr7->waitRequest();
         if ($request === null) {
-            $worker->waitPayload(); // пинг от RR
             continue;
         }
 
