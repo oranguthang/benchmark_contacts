@@ -12,16 +12,14 @@ require __DIR__ . '/vendor/autoload.php';
 $relay  = new StreamRelay(STDIN, STDOUT);
 $worker = new Worker($relay);
 
-// PSR-7 воркер
-$psr17 = new Psr17Factory();
-$psr7  = new PSR7Worker($worker, $psr17, $psr17, $psr17);
+// PSR-7 фабрики
+$psr17     = new Psr17Factory();
+$psr7      = new PSR7Worker($worker, $psr17, $psr17, $psr17);
 
 // читаем CPU_CORES и строим пул
 $cpuCores   = (int)(getenv('CPU_CORES') ?: 1);
 $totalConns = $cpuCores * 4;
-
-// каждый воркер получит равную часть пула:
-$perWorker = max(1, (int)floor($totalConns / $cpuCores));
+$perWorker  = max(1, (int)floor($totalConns / $cpuCores));
 
 $pool = new SplQueue();
 for ($i = 0; $i < $perWorker; $i++) {
@@ -37,15 +35,21 @@ for ($i = 0; $i < $perWorker; $i++) {
     $pool->enqueue($pdo);
 }
 
-// загружаем Slim-приложение; в app.php мы будем использовать $pool
+// загружаем Slim-приложение
 $app = require __DIR__ . '/index.php';
 
-// основной цикл приёма HTTP-запросов
-while ($req = $psr7->waitRequest()) {
+// основной цикл
+while (true) {
     try {
-        $resp = $app->handle($req);
-        $psr7->respond($resp);
+        $request = $psr7->waitRequest();
+        if ($request === null) {
+            $worker->waitPayload(); // чтобы не сдох воркер
+            continue;
+        }
+
+        $response = $app->handle($request);
+        $psr7->respond($response);
     } catch (\Throwable $e) {
-        $psr7->getWorker()->error((string)$e);
+        $worker->error((string)$e);
     }
 }
