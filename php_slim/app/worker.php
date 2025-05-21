@@ -2,19 +2,19 @@
 declare(strict_types=1);
 
 use Spiral\RoadRunner\Worker;
-use Spiral\Goridge\StreamRelay;
+use Spiral\Goridge\SocketRelay;
 use Spiral\RoadRunner\Http\PSR7Worker;
 use Nyholm\Psr7\Factory\Psr17Factory;
 
 require __DIR__ . '/vendor/autoload.php';
 
-// создаём RR-воркер
-$relay  = new StreamRelay(STDIN, STDOUT);
+// создаём RR-воркер через сокет
+$relay  = new SocketRelay('127.0.0.1', 6001, SocketRelay::SOCK_TCP);
 $worker = new Worker($relay);
 
 // PSR-7 фабрики
-$psr17     = new Psr17Factory();
-$psr7      = new PSR7Worker($worker, $psr17, $psr17, $psr17);
+$psr17 = new Psr17Factory();
+$psr7  = new PSR7Worker($worker, $psr17, $psr17, $psr17);
 
 // читаем CPU_CORES и строим пул
 $cpuCores   = (int)(getenv('CPU_CORES') ?: 1);
@@ -43,7 +43,7 @@ while (true) {
     try {
         $request = $psr7->waitRequest();
         if ($request === null) {
-            $worker->waitPayload(); // чтобы не сдох воркер
+            $worker->waitPayload(); // пинг от RR
             continue;
         }
 
