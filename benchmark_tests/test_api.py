@@ -45,7 +45,7 @@ def test_create_contact(base_url, contact):
     assert response.status_code == 201
     data = response.json()
 
-    # Проверка что все поля есть и корректные
+    # Check that all fields are present and correct
     expected_response = {
         "id": ANY,
         "external_id": contact["external_id"],
@@ -80,7 +80,7 @@ def test_get_all_contacts(base_url):
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
-    assert len(data) == 10  # Мы создали 10 контактов
+    assert len(data) == 10  # We created 10 contacts
 
     for contact in data:
         check_contact(contact)

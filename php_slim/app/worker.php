@@ -7,14 +7,14 @@ use Nyholm\Psr7\Factory\Psr17Factory;
 
 require __DIR__ . '/vendor/autoload.php';
 
-// создаём RR-воркер автоматически по RR_RPC
+// create RR worker automatically via RR_RPC
 $worker = Worker::create();
 
-// PSR-7 фабрики
+// PSR-7 factories
 $psr17 = new Psr17Factory();
 $psr7  = new PSR7Worker($worker, $psr17, $psr17, $psr17);
 
-// читаем CPU_CORES и строим пул
+// read CPU_CORES and build the pool
 $cpuCores   = (int)(getenv('CPU_CORES') ?: 1);
 $totalConns = $cpuCores * 4;
 $perWorker  = max(1, (int)floor($totalConns / $cpuCores));
@@ -33,15 +33,15 @@ for ($i = 0; $i < $perWorker; $i++) {
     $pool->enqueue($pdo);
 }
 
-// загружаем Slim-приложение
+// load Slim app
 $app = require __DIR__ . '/index.php';
 
-// основной цикл
+// main loop
 while (true) {
     try {
         $request = $psr7->waitRequest();
         if ($request === null) {
-            $worker->waitPayload(); // пинг от RR
+            $worker->waitPayload(); // ping from RR
             continue;
         }
 

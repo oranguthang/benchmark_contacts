@@ -6,19 +6,19 @@ use DI\Container;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\ResponseInterface as Response;
 
-// контейнер и создание приложения
+// container and app creation
 $container = new Container();
 AppFactory::setContainer($container);
 $app = AppFactory::create();
 
-// чтобы Slim парсил JSON, form-data и прочее
+// enable Slim to parse JSON, form-data and other content types
 $app->addBodyParsingMiddleware();
 
-// (опционально) маршрутизация и обработка ошибок
+// (optional) routing and error handling
 $app->addRoutingMiddleware();
 $app->addErrorMiddleware(true, true, true);
 
-// общий пул PDO передаётся из worker.php
+// shared PDO pool is passed from worker.php
 global $pool;
 
 // POST /contacts
@@ -26,7 +26,7 @@ $app->post('/contacts', function (Request $request, Response $response) use ($po
     $data = (array)$request->getParsedBody();
 
     if (empty($data['external_id']) || empty($data['phone_number'])) {
-        $error = ['error' => 'external_id и phone_number обязательны'];
+        $error = ['error' => 'external_id and phone_number are required'];
         $response->getBody()->write(json_encode($error));
         return $response
             ->withHeader('Content-Type', 'application/json')

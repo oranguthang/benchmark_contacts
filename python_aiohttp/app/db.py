@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
-cpu_cores = int(os.getenv("CPU_CORES", 4))  # Значение по умолчанию - 4, если переменная не задана
+cpu_cores = int(os.getenv("CPU_CORES", 4))  # Default value is 4 if the variable is not set
 pool_size = cpu_cores * 4
 
 DATABASE_URL = os.getenv("DATABASE_URL").replace("postgres://", "postgresql+asyncpg://")
