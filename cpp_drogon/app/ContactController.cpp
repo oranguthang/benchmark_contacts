@@ -90,7 +90,7 @@ void ContactController::createContact(const HttpRequestPtr &req,
 void ContactController::getContacts(const HttpRequestPtr& req,
                                     std::function<void(const HttpResponsePtr&)>&& callback)
 {
-    // Простая «SQL-инъекцийная» защита для строк
+    // Simple "SQL-injection" protection for strings
     auto escape = [](const std::string &s) {
         std::string r;
         r.reserve(s.size());
@@ -101,7 +101,7 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         return r;
     };
 
-    // Берём клиент из поля контроллера, а не из app()
+    // Get client from controller field, not from app()
     auto client = dbClient_;
     if (!client) {
         auto resp = HttpResponse::newHttpResponse();
@@ -111,7 +111,7 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         return;
     }
 
-    // Собираем строку
+    // Build the SQL query
     std::string sql =
         "SELECT id, external_id, phone_number, date_created, date_updated "
         "FROM contacts WHERE 1=1";
@@ -141,7 +141,7 @@ void ContactController::getContacts(const HttpRequestPtr& req,
            " LIMIT " + std::to_string(limit) +
            " OFFSET " + std::to_string(offset);
 
-    // Коллбэки
+    // Callbacks
     auto onSuccess = [callback](const drogon::orm::Result &rows) {
         Json::Value arr(Json::arrayValue);
         for (auto &r : rows) {
@@ -163,6 +163,6 @@ void ContactController::getContacts(const HttpRequestPtr& req,
         callback(resp);
     };
 
-    // Выполняем
+    // Execute the query
     client->execSqlAsync(sql, onSuccess, onError);
 }

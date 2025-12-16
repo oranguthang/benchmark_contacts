@@ -12,7 +12,7 @@ RUN mkdir -p build && \
     cmake .. && \
     make -j$(nproc)
 
-# Переменные окружения
+# Environment variables
 ENV DB_HOST=db \
     DB_PORT=5432 \
     DB_NAME=contacts_db \

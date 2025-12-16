@@ -1,7 +1,7 @@
-# Имя compose файла
+# Docker compose file name
 COMPOSE_FILE=docker-compose.yml
 
-# Сервисы
+# Services
 PYTHON_SERVICES=db python_aiohttp benchmark_tests_python benchmark_python
 PHP_SERVICES=db php_slim benchmark_tests_php benchmark_php
 JAVA_SERVICES=db java_spring benchmark_tests_java benchmark_java
@@ -11,7 +11,7 @@ NODE_SERVICES=db node_express benchmark_tests_node benchmark_node
 C_SERVICES=db c_microhttpd benchmark_tests_c benchmark_c
 CPP_SERVICES=db cpp_drogon benchmark_tests_cpp benchmark_cpp
 
-# Общие команды
+# Common commands
 down:
 	docker-compose -f $(COMPOSE_FILE) down -v
 
@@ -63,120 +63,120 @@ build-c:
 build-cpp:
 	docker-compose -f $(COMPOSE_FILE) build $(CPP_SERVICES)
 
-# Бенчмарк для Python
+# Benchmark for Python
 benchmark-python: down build-python up-python
-	@echo "Ожидание запуска сервиса..."
+	@echo "Waiting for service to start..."
 	sleep 1
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_python
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_python
 
-# Бенчмарк для PHP
+# Benchmark for PHP
 benchmark-php: down build-php up-php
-	@echo "Ожидание запуска сервиса..."
+	@echo "Waiting for service to start..."
 	sleep 1
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_php
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_php
 
-# Бенчмарк для Java
+# Benchmark for Java
 benchmark-java: down build-java up-java
-	@echo "Ожидание запуска сервиса..."
+	@echo "Waiting for service to start..."
 	sleep 1
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_java
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_java
 
-# Бенчмарк для Rust
+# Benchmark for Rust
 benchmark-rust: down build-rust up-rust
-	@echo "Ожидание запуска сервиса..."
+	@echo "Waiting for service to start..."
 	sleep 1
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_rust
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_rust
 
-# Бенчмарк для Go
+# Benchmark for Go
 benchmark-go: down build-go up-go
-	@echo "Ожидание запуска сервиса..."
+	@echo "Waiting for service to start..."
 	sleep 1
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_go
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_go
 
-# Бенчмарк для Node.js
+# Benchmark for Node.js
 benchmark-node: down build-node up-node
-	@echo "Ожидание запуска сервиса..."
+	@echo "Waiting for service to start..."
 	sleep 1
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_python
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_python
 
-# Бенчмарк для C
+# Benchmark for C
 benchmark-c: down build-c up-c
-	@echo "Ожидание запуска сервиса..."
+	@echo "Waiting for service to start..."
 	sleep 1
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_c
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_c
 
-# Бенчмарк для CPP
+# Benchmark for CPP
 benchmark-cpp: down build-cpp up-cpp
-	@echo "Ожидание запуска сервиса..."
+	@echo "Waiting for service to start..."
 	sleep 1
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_tests_cpp
 	docker-compose -f $(COMPOSE_FILE) run --rm benchmark_cpp
 
-# Полная остановка всех контейнеров
+# Full stop of all containers
 stop:
 	docker-compose -f $(COMPOSE_FILE) down -v
 
-# Только запуск без бенчмарка
+# Run only without benchmark
 run-python: down build-python up-python
-	@echo "Сервисы Python запущены."
+	@echo "Python services started."
 
 run-php: down build-php up-php
-	@echo "Сервисы PHP запущены."
+	@echo "PHP services started."
 
 run-java: down build-java up-java
-	@echo "Сервисы Java запущены."
+	@echo "Java services started."
 
 run-rust: down build-rust up-rust
-	@echo "Сервисы Rust запущены."
+	@echo "Rust services started."
 
 run-go: down build-go up-go
-	@echo "Сервисы Go запущены."
+	@echo "Go services started."
 
 run-node: down build-node up-node
-	@echo "Сервисы Node.js запущены."
+	@echo "Node.js services started."
 
 run-c: down build-c up-c
-	@echo "Сервисы C запущены."
+	@echo "C services started."
 
 run-cpp: down build-cpp up-cpp
-	@echo "Сервисы C++ запущены."
+	@echo "C++ services started."
 
-# Логи для Python сервиса
+# Logs for Python service
 logs-python:
 	docker-compose -f $(COMPOSE_FILE) logs -f python_aiohttp
 
-# Логи для PHP сервиса
+# Logs for PHP service
 logs-php:
 	docker-compose -f $(COMPOSE_FILE) logs -f php_slim
 
-# Логи для Java сервиса
+# Logs for Java service
 logs-java:
 	docker-compose -f $(COMPOSE_FILE) logs -f java_spring
 
-# Логи для Rust сервиса
+# Logs for Rust service
 logs-rust:
 	docker-compose -f $(COMPOSE_FILE) logs -f rust_axum
 
-# Логи для Go сервиса
+# Logs for Go service
 logs-go:
 	docker-compose -f $(COMPOSE_FILE) logs -f go_fiber
 
-# Логи для Node.js сервиса
+# Logs for Node.js service
 logs-node:
 	docker-compose -f $(COMPOSE_FILE) logs -f node_express
 
-# Логи для C сервиса
+# Logs for C service
 logs-c:
 	docker-compose -f $(COMPOSE_FILE) logs -f c_microhttpd
 
-# Логи для C++ сервиса
+# Logs for C++ service
 logs-cpp:
 	docker-compose -f $(COMPOSE_FILE) logs -f cpp_drogon
 
